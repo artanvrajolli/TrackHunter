@@ -14,8 +14,14 @@
   "build": {
     "appId": "com.trackmania.mapviewer",
     "productName": "Trackmania Map Viewer",
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "background.jpg"
+    ],
     "win": {
-      "target": "nsis"
+      "target": ["nsis", "portable"]
     }
   },
   "dependencies": {
