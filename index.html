@@ -13,28 +13,11 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            background: linear-gradient(rgba(0,0,0,0.75), rgba(0,0,0,0.75)), url('background.jpg') no-repeat center center fixed;
+            background-size: cover;
+            background-color: #1a1a2e;
             color: #e0e0e0;
             min-height: 100vh;
-        }
-
-        .header {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 20px;
-            text-align: center;
-            border-bottom: 2px solid #00d9ff;
-        }
-
-        .header h1 {
-            color: #00d9ff;
-            font-size: 2em;
-            text-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
-        }
-
-        .header p {
-            color: #888;
-            margin-top: 5px;
-            font-size: 0.9em;
         }
 
         /* Modern Filter Bar */
@@ -337,10 +320,10 @@
         /* Maps Grid */
         .maps-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
             padding: 20px;
-            max-width: 1600px;
+            max-width: 1800px;
             margin: 0 auto;
         }
 
@@ -355,9 +338,76 @@
         }
 
         .map-card:hover {
-            transform: translateY(-5px);
             box-shadow: 0 10px 30px rgba(0, 217, 255, 0.3);
             border-color: #00d9ff;
+        }
+
+        .map-card.border-white { border-bottom: 4px solid #ffffff; }
+        .map-card.border-green { border-bottom: 4px solid #00ff88; }
+        .map-card.border-yellow { border-bottom: 4px solid #ffdd00; }
+        .map-card.border-red { border-bottom: 4px solid #ff4444; }
+        .map-card.border-black { border-bottom: 4px solid #000000; }
+
+        .color-filter-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .color-filter-label {
+            color: #aaa;
+            font-size: 0.85em;
+        }
+        .color-toggles {
+            display: flex;
+            gap: 4px;
+        }
+        .color-toggle {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            opacity: 0.4;
+            border: 2px solid transparent;
+            transition: opacity 0.2s, border-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .color-toggle.active {
+            opacity: 1;
+            border-color: #fff;
+        }
+        .color-toggle:hover {
+            border-color: #fff;
+        }
+        .color-toggle#colorWhite, .color-toggle#colorYellow, .color-toggle#colorGreen {
+            color: #000;
+        }
+        .color-toggle#colorRed, .color-toggle#colorBlack, .color-toggle#colorUnclassified {
+            color: #fff;
+        }
+        
+        .season-toggle {
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            cursor: pointer;
+            opacity: 0.4;
+            border: 2px solid transparent;
+            transition: opacity 0.2s, border-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .season-toggle.active {
+            opacity: 1;
+            border-color: #fff;
+        }
+        .season-toggle:hover {
+            border-color: #fff;
         }
 
         .map-image {
@@ -535,12 +585,7 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🏁 Trackmania Map Viewer</h1>
-        <p>Ubisoft Nadeo Official Maps</p>
-    </div>
 
-    <!-- Modern Filter Bar -->
     <div class="filter-bar">
         <div class="filter-bar-inner">
             <!-- Year Filter -->
@@ -552,13 +597,13 @@
             <!-- Search Input -->
             <div class="filter-group">
                 <span class="filter-group-label">🔍 Search</span>
-                <input type="text" id="searchInput" placeholder="Map name..." oninput="applyFilters()">
+                <input type="text" id="searchInput" placeholder="Map name..." oninput="saveFilterState(); applyFilters()">
             </div>
 
             <!-- Sort Dropdown -->
             <div class="filter-group">
                 <span class="filter-group-label">↕️ Sort</span>
-                <select id="sortSelect" onchange="applyFilters()">
+                <select id="sortSelect" onchange="saveFilterState(); applyFilters()">
                     <option value="mapId" selected>Map ID</option>
                     <option value="natural">Number (1, 2, ..., 10)</option>
                     <option value="name">Name (A-Z)</option>
@@ -570,10 +615,34 @@
                 <button class="sort-btn desc" id="sortDescBtn" onclick="setSortDirection('desc')" title="Descending">↓</button>
             </div>
 
-            <!-- Cached Only Toggle -->
-            <div class="toggle-container" id="cachedToggle" onclick="toggleCachedOnly()" title="Show only cached maps">
+            <!-- Cached Include Toggle -->
+            <div class="toggle-container active" id="cachedToggle" onclick="toggleIncludeCached()" title="Include cached maps">
                 <div class="toggle-switch"></div>
-                <span class="toggle-label">💾 Cached Only</span>
+                <span class="toggle-label">💾 Cached Include</span>
+            </div>
+
+            <!-- Color Filter -->
+            <div class="color-filter-container">
+                <span class="color-filter-label">Track Colors:</span>
+                <div class="color-toggles">
+                    <div class="color-toggle active" id="colorWhite" onclick="toggleColorFilter('white')" style="background:#ffffff;" title="White (1-5)">✓</div>
+                    <div class="color-toggle active" id="colorGreen" onclick="toggleColorFilter('green')" style="background:#00ff88;" title="Green (6-10)">✓</div>
+                    <div class="color-toggle active" id="colorYellow" onclick="toggleColorFilter('yellow')" style="background:#ffdd00;" title="Yellow (11-15)">✓</div>
+                    <div class="color-toggle active" id="colorRed" onclick="toggleColorFilter('red')" style="background:#ff4444;" title="Red (16-20)">✓</div>
+                    <div class="color-toggle active" id="colorBlack" onclick="toggleColorFilter('black')" style="background:#000000;" title="Black (21-25)">✓</div>
+                    <div class="color-toggle active" id="colorUnclassified" onclick="toggleColorFilter('unclassified')" style="background:#666666;" title="Unclassified">?</div>
+                </div>
+            </div>
+
+            <!-- Season Filter -->
+            <div class="color-filter-container">
+                <span class="color-filter-label">Seasons:</span>
+                <div class="color-toggles">
+                    <div class="season-toggle active" id="seasonWinter" onclick="toggleSeasonFilter('Winter')" title="Winter">❄️</div>
+                    <div class="season-toggle active" id="seasonSpring" onclick="toggleSeasonFilter('Spring')" title="Spring">🌸</div>
+                    <div class="season-toggle active" id="seasonSummer" onclick="toggleSeasonFilter('Summer')" title="Summer">☀️</div>
+                    <div class="season-toggle active" id="seasonAutumn" onclick="toggleSeasonFilter('Autumn')" title="Autumn">🍂</div>
+                </div>
             </div>
 
             <!-- Stats -->
@@ -610,8 +679,83 @@
         
         let allMaps = [];
         let cachedMapsIds = new Set();
-        let isCachedOnly = false;
+        let includeCached = true;
         let sortDirection = 'asc';
+        
+        let colorFilters = {
+            white: true,
+            green: true,
+            yellow: true,
+            red: true,
+            black: true,
+            unclassified: true
+        };
+        
+        let seasonFilters = {
+            Winter: true,
+            Spring: true,
+            Summer: true,
+            Autumn: true
+        };
+
+        // Save filter state to electron-store
+        async function saveFilterState() {
+            const state = {
+                includeCached,
+                sortDirection,
+                sortBy: document.getElementById('sortSelect').value,
+                yearRange: document.getElementById('yearRange').value,
+                searchTerm: document.getElementById('searchInput').value,
+                colorFilters,
+                seasonFilters
+            };
+            await window.electronAPI.saveFilterState(state);
+        }
+
+        // Load filter state from electron-store
+        async function loadFilterState() {
+            const saved = await window.electronAPI.loadFilterState();
+            if (saved) {
+                try {
+                    if (saved.includeCached !== undefined) includeCached = saved.includeCached;
+                    if (saved.sortDirection !== undefined) sortDirection = saved.sortDirection;
+                    if (saved.sortBy) window._savedSortBy = saved.sortBy;
+                    if (saved.yearRange) window._savedYearRange = saved.yearRange;
+                    if (saved.searchTerm) window._savedSearchTerm = saved.searchTerm;
+                    if (saved.colorFilters) Object.assign(colorFilters, saved.colorFilters);
+                    if (saved.seasonFilters) Object.assign(seasonFilters, saved.seasonFilters);
+                } catch (e) {}
+            }
+        }
+
+        // Apply loaded filter state to UI
+        function applyFilterStateToUI() {
+            document.getElementById('cachedToggle').classList.toggle('active', includeCached);
+            document.getElementById('sortAscBtn').classList.toggle('active', sortDirection === 'asc');
+            document.getElementById('sortDescBtn').classList.toggle('active', sortDirection === 'desc');
+            
+            if (window._savedSortBy) {
+                document.getElementById('sortSelect').value = window._savedSortBy;
+            }
+            if (window._savedYearRange) {
+                document.getElementById('yearRange').value = window._savedYearRange;
+            }
+            if (window._savedSearchTerm) {
+                document.getElementById('searchInput').value = window._savedSearchTerm;
+            }
+            
+            document.getElementById('colorWhite').classList.toggle('active', colorFilters.white);
+            document.getElementById('colorGreen').classList.toggle('active', colorFilters.green);
+            document.getElementById('colorYellow').classList.toggle('active', colorFilters.yellow);
+            document.getElementById('colorRed').classList.toggle('active', colorFilters.red);
+            document.getElementById('colorBlack').classList.toggle('active', colorFilters.black);
+            document.getElementById('colorUnclassified').classList.toggle('active', colorFilters.unclassified);
+            
+            document.getElementById('seasonWinter').classList.toggle('active', seasonFilters.Winter);
+            document.getElementById('seasonSpring').classList.toggle('active', seasonFilters.Spring);
+            document.getElementById('seasonSummer').classList.toggle('active', seasonFilters.Summer);
+            document.getElementById('seasonAutumn').classList.toggle('active', seasonFilters.Autumn);
+        }
 
         // Set default year range and populate dropdown
         function setDefaultYearRange() {
@@ -627,10 +771,15 @@
             }
             
             // Set default to current year
-            yearRangeSelect.value = `${currentYear}`;
+            if (!window._savedYearRange) {
+                yearRangeSelect.value = `${currentYear}`;
+            }
             
             // Add change listener to refresh on year change
-            yearRangeSelect.addEventListener('change', fetchMaps);
+            yearRangeSelect.addEventListener('change', () => {
+                saveFilterState();
+                fetchMaps();
+            });
         }
 
         function buildApiUrl() {
@@ -645,11 +794,28 @@
             return url;
         }
 
-        // Toggle cached only switch
-        function toggleCachedOnly() {
-            isCachedOnly = !isCachedOnly;
+        // Toggle include cached maps
+        function toggleIncludeCached() {
+            includeCached = !includeCached;
             const toggle = document.getElementById('cachedToggle');
-            toggle.classList.toggle('active', isCachedOnly);
+            toggle.classList.toggle('active', includeCached);
+            saveFilterState();
+            applyFilters();
+        }
+
+        // Toggle color filter
+        function toggleColorFilter(color) {
+            colorFilters[color] = !colorFilters[color];
+            document.getElementById('color' + color.charAt(0).toUpperCase() + color.slice(1)).classList.toggle('active', colorFilters[color]);
+            saveFilterState();
+            applyFilters();
+        }
+
+        // Toggle season filter
+        function toggleSeasonFilter(season) {
+            seasonFilters[season] = !seasonFilters[season];
+            document.getElementById('season' + season).classList.toggle('active', seasonFilters[season]);
+            saveFilterState();
             applyFilters();
         }
 
@@ -658,6 +824,7 @@
             sortDirection = direction;
             document.getElementById('sortAscBtn').classList.toggle('active', direction === 'asc');
             document.getElementById('sortDescBtn').classList.toggle('active', direction === 'desc');
+            saveFilterState();
             applyFilters();
         }
 
@@ -714,9 +881,37 @@
                 );
             }
             
-            // Apply cached only filter
-            if (isCachedOnly) {
-                filtered = filtered.filter(map => cachedMapsIds.has(map.MapId));
+            // Apply cached include/exclude filter
+            if (!includeCached) {
+                filtered = filtered.filter(map => !cachedMapsIds.has(map.MapId));
+            }
+            
+            // Apply color filters
+            filtered = filtered.filter(map => {
+                const match = map.Name.match(/(\d{4})\s*-\s*(\d{1,2})$/);
+                if (!match) {
+                    return colorFilters.unclassified;
+                }
+                const num = parseInt(match[2], 10);
+                if (num >= 1 && num <= 5) return colorFilters.white;
+                if (num >= 6 && num <= 10) return colorFilters.green;
+                if (num >= 11 && num <= 15) return colorFilters.yellow;
+                if (num >= 16 && num <= 20) return colorFilters.red;
+                if (num >= 21 && num <= 25) return colorFilters.black;
+                return colorFilters.unclassified;
+            });
+            
+            // Apply season filters
+            const hasSeasonFilter = Object.values(seasonFilters).some(v => !v);
+            if (hasSeasonFilter) {
+                filtered = filtered.filter(map => {
+                    const name = map.Name;
+                    if (name.match(/Winter\s+\d{4}/i)) return seasonFilters.Winter;
+                    if (name.match(/Spring\s+\d{4}/i)) return seasonFilters.Spring;
+                    if (name.match(/Summer\s+\d{4}/i)) return seasonFilters.Summer;
+                    if (name.match(/Autumn\s+\d{4}/i)) return seasonFilters.Autumn;
+                    return true;
+                });
             }
             
             // Apply sorting
@@ -767,6 +962,18 @@
             return 'Lunatic';
         }
 
+        function getSeasonBorderClass(name) {
+            const match = name.match(/(\d{4})\s*-\s*(\d{1,2})$/);
+            if (!match) return '';
+            const num = parseInt(match[2], 10);
+            if (num >= 1 && num <= 5) return 'border-white';
+            if (num >= 6 && num <= 10) return 'border-green';
+            if (num >= 11 && num <= 15) return 'border-yellow';
+            if (num >= 16 && num <= 20) return 'border-red';
+            if (num >= 21 && num <= 25) return 'border-black';
+            return '';
+        }
+
         function displayMaps(maps) {
             const content = document.getElementById('content');
 
@@ -776,7 +983,7 @@
             }
 
             const html = `<div class="maps-grid">${maps.map(map => `
-                <div class="map-card" onclick="handleMapClick(event, '${map.MapId}', '${map.Name.replace(/'/g, "\\'")}')">
+                <div class="map-card ${getSeasonBorderClass(map.Name)}" onclick="handleMapClick(event, '${map.MapId}', '${map.Name.replace(/'/g, "\\'")}')">
                     ${cachedMapsIds.has(map.MapId) ? `
                     <div class="cached-indicator">
                         <svg class="cached-icon" viewBox="0 0 24 24">
@@ -858,27 +1065,27 @@
                         case 'launching':
                             progressText.textContent = 'Launching map...';
                             break;
-                        case 'complete':
-                            progressText.textContent = 'Complete!';
-                            // Add to cached maps and show badge
-                            cachedMapsIds.add(mapId);
-                            // Find the map card and add cached indicator
-                            const mapCard = document.querySelector(`.map-card[onclick*="'${mapId}'"]`);
-                            if (mapCard && !mapCard.querySelector('.cached-indicator')) {
-                                const cachedIndicator = document.createElement('div');
-                                cachedIndicator.className = 'cached-indicator';
-                                cachedIndicator.innerHTML = `
-                                    <svg class="cached-icon" viewBox="0 0 24 24">
-                                        <path d="M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.11 0 2-.9 2-2V5c0-1.1-.89-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                                    </svg>
-                                    Cached
-                                `;
-                                mapCard.appendChild(cachedIndicator);
-                            }
-                            setTimeout(() => {
-                                progressOverlay.style.display = 'none';
-                            }, 1000);
-                            break;
+                            case 'complete':
+                                progressText.textContent = 'Complete!';
+                                // Add to cached maps and show badge
+                                cachedMapsIds.add(mapId);
+                                // Find the map card and add cached indicator
+                                const mapCard = document.querySelector(`.map-card[onclick*="'${mapId}'"]`);
+                                if (mapCard && !mapCard.querySelector('.cached-indicator')) {
+                                    const cachedIndicator = document.createElement('div');
+                                    cachedIndicator.className = 'cached-indicator';
+                                    cachedIndicator.innerHTML = `
+                                        <svg class="cached-icon" viewBox="0 0 24 24">
+                                            <path d="M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.11 0 2-.9 2-2V5c0-1.1-.89-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                        </svg>
+                                        Cached
+                                    `;
+                                    mapCard.appendChild(cachedIndicator);
+                                }
+                                setTimeout(() => {
+                                    progressOverlay.style.display = 'none';
+                                }, 1000);
+                                break;
                         case 'error':
                             progressText.textContent = `Error: ${data.error}`;
                             setTimeout(() => {
@@ -893,9 +1100,13 @@
         }
 
         // Initialize
-        setDefaultYearRange();
-        document.getElementById('sortAscBtn').classList.add('active');
-        fetchMaps();
+        async function init() {
+            await loadFilterState();
+            setDefaultYearRange();
+            applyFilterStateToUI();
+            fetchMaps();
+        }
+        init();
     </script>
 </body>
 </html>

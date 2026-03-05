@@ -3,6 +3,9 @@ const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
+const Store = require('electron-store');
+
+const store = new Store();
 
 let mainWindow;
 const logFile = path.join(os.tmpdir(), 'trackmania-viewer.log');
@@ -254,4 +257,15 @@ ipcMain.handle('open-map-direct', async (event, mapId) => {
 
     await shell.openExternal(`trackmania://joinmap/${mapId}`);
     return { success: true, method: 'protocol' };
+});
+
+// Save filter state
+ipcMain.handle('save-filter-state', async (event, state) => {
+    store.set('filterState', state);
+    return true;
+});
+
+// Load filter state
+ipcMain.handle('load-filter-state', async () => {
+    return store.get('filterState', null);
 });

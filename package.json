@@ -17,5 +17,8 @@
     "win": {
       "target": "nsis"
     }
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0"
   }
 }
