@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -71,25 +71,35 @@ app.on('activate', () => {
 ipcMain.handle('open-trackmania', async (event, mapId) => {
     log(`open-trackmania called with mapId: ${mapId}`);
     
-    const possiblePaths = [
-        'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Trackmania\\Trackmania.exe',
-        'C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\games\\Trackmania\\Trackmania.exe',
-        'C:\\Program Files\\Ubisoft\\Ubisoft Game Launcher\\games\\Trackmania\\Trackmania.exe',
-        'C:\\Program Files\\Epic Games\\Trackmania\\Trackmania.exe',
-        'C:\\Program Files (x86)\\Epic Games\\Trackmania\\Trackmania.exe',
-        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'trackmania', 'Trackmania.exe'),
-        path.join(process.env.LOCALAPPDATA || '', 'Ubisoft Game Launcher', 'games', 'Trackmania', 'Trackmania.exe'),
-        'D:\\Games\\Trackmania\\Trackmania.exe',
-        'D:\\Games\\Steam\\steamapps\\common\\Trackmania\\Trackmania.exe',
-        'E:\\Games\\Trackmania\\Trackmania.exe',
-    ];
+    let exePath = config.trackmaniaPath;
     
-    // Find the first existing executable
-    let exePath = null;
-    for (const p of possiblePaths) {
-        if (fs.existsSync(p)) {
-            exePath = p;
-            break;
+    if (!exePath || !fs.existsSync(exePath)) {
+        const possiblePaths = [
+            'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Trackmania\\Trackmania.exe',
+            'C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\games\\Trackmania\\Trackmania.exe',
+            'C:\\Program Files\\Ubisoft\\Ubisoft Game Launcher\\games\\Trackmania\\Trackmania.exe',
+            'C:\\Program Files\\Epic Games\\Trackmania\\Trackmania.exe',
+            'C:\\Program Files (x86)\\Epic Games\\Trackmania\\Trackmania.exe',
+            path.join(process.env.LOCALAPPDATA || '', 'Programs', 'trackmania', 'Trackmania.exe'),
+            path.join(process.env.LOCALAPPDATA || '', 'Ubisoft Game Launcher', 'games', 'Trackmania', 'Trackmania.exe'),
+            'D:\\Games\\Trackmania\\Trackmania.exe',
+            'D:\\Games\\Steam\\steamapps\\common\\Trackmania\\Trackmania.exe',
+            'E:\\Games\\Trackmania\\Trackmania.exe',
+        ];
+        
+        // Find the first existing executable
+        exePath = null;
+        for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+                exePath = p;
+                break;
+            }
+        }
+        
+        // Save the found path to config to avoid searching again
+        if (exePath) {
+            config.trackmaniaPath = exePath;
+            saveConfig();
         }
     }
     
@@ -277,6 +287,30 @@ ipcMain.handle('open-map-direct', async (event, mapId) => {
 
     await shell.openExternal(`trackmania://joinmap/${mapId}`);
     return { success: true, method: 'protocol' };
+});
+
+ipcMain.handle('get-trackmania-path', async () => {
+    return config.trackmaniaPath || null;
+});
+
+ipcMain.handle('select-trackmania-path', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Select Trackmania.exe',
+        filters: [{ name: 'Executables', extensions: ['exe'] }],
+        properties: ['openFile']
+    });
+
+    if (!result.canceled && result.filePaths.length > 0) {
+        const selectedPath = result.filePaths[0];
+        if (selectedPath.toLowerCase().endsWith('trackmania.exe')) {
+            config.trackmaniaPath = selectedPath;
+            saveConfig();
+            return { success: true, path: selectedPath };
+        } else {
+            return { success: false, error: 'Please select a file named Trackmania.exe' };
+        }
+    }
+    return { success: false, canceled: true };
 });
 
 ipcMain.handle('save-filter-state', async (event, state) => {

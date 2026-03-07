@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     isMapCached: (mapId) => ipcRenderer.invoke('is-map-cached', mapId),
     saveFilterState: (state) => ipcRenderer.invoke('save-filter-state', state),
     loadFilterState: () => ipcRenderer.invoke('load-filter-state'),
+    getTrackmaniaPath: () => ipcRenderer.invoke('get-trackmania-path'),
+    selectTrackmaniaPath: () => ipcRenderer.invoke('select-trackmania-path'),
     onDownloadProgress: (callback) => {
         ipcRenderer.on('download-progress', (event, data) => callback(data));
     }
