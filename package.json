@@ -22,11 +22,14 @@
       "background.jpg"
     ],
     "win": {
-      "target": ["nsis", "portable"]
+      "target": [
+        "nsis",
+        "portable"
+      ]
     },
     "publish": null
   },
   "dependencies": {
-    "electron-store": "^8.2.0"
+    "electron-store": "^7.0.3"
   }
 }

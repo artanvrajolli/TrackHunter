@@ -3,9 +3,27 @@ const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
-const Store = require('electron-store');
 
-const store = new Store();
+let config = {};
+const configPath = path.join(app.getPath('userData'), 'config.json');
+
+function loadConfig() {
+    try {
+        if (fs.existsSync(configPath)) {
+            config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        }
+    } catch (e) {
+        config = {};
+    }
+}
+
+function saveConfig() {
+    try {
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    } catch (e) {
+        log(`Error saving config: ${e.message}`);
+    }
+}
 
 let mainWindow;
 const logFile = path.join(os.tmpdir(), 'trackmania-viewer.log');
@@ -18,6 +36,8 @@ function log(message) {
 }
 
 log('Application started');
+
+loadConfig();
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -259,13 +279,22 @@ ipcMain.handle('open-map-direct', async (event, mapId) => {
     return { success: true, method: 'protocol' };
 });
 
-// Save filter state
 ipcMain.handle('save-filter-state', async (event, state) => {
-    store.set('filterState', state);
-    return true;
+    try {
+        config.filterState = state;
+        saveConfig();
+        return { success: true };
+    } catch (error) {
+        log(`Error saving filter state: ${error.message}`);
+        return { success: false, error: error.message };
+    }
 });
 
-// Load filter state
 ipcMain.handle('load-filter-state', async () => {
-    return store.get('filterState', null);
+    try {
+        return config.filterState || null;
+    } catch (error) {
+        log(`Error loading filter state: ${error.message}`);
+        return null;
+    }
 });
