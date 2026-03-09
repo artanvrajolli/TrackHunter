@@ -6,7 +6,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "track:clean": "node scripts/track-clean.js"
   },
   "devDependencies": {
     "electron": "^28.0.0",

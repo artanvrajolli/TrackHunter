@@ -35,6 +35,125 @@ function log(message) {
     console.log(logMessage);
 }
 
+function cleanupFile(filePath) {
+    try {
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+    } catch (error) {
+        log(`Error cleaning up file ${filePath}: ${error.message}`);
+    }
+}
+
+function isLikelyHtmlResponse(contentType, initialChunk) {
+    const normalizedContentType = (contentType || '').toLowerCase();
+    const normalizedChunk = (initialChunk || '').toString('utf8', 0, Math.min(initialChunk.length || 0, 512)).trimStart().toLowerCase();
+
+    if (normalizedContentType.includes('text/html') || normalizedContentType.includes('application/xhtml')) {
+        return true;
+    }
+
+    return normalizedChunk.startsWith('<!doctype html') || normalizedChunk.startsWith('<html');
+}
+
+function downloadMapFile(url, mapPath, event, mapId) {
+    const https = require('https');
+
+    return new Promise((resolve, reject) => {
+        const request = https.get(url, (response) => {
+            log(`Download response status: ${response.statusCode}`);
+            event.sender.send('download-progress', { mapId, status: 'downloading', progress: 10 });
+
+            if (response.statusCode === 301 || response.statusCode === 302) {
+                const redirectUrl = response.headers.location;
+                log(`Redirect to: ${redirectUrl}`);
+                response.resume();
+
+                if (!redirectUrl) {
+                    reject(new Error('TMX returned a redirect without a location header'));
+                    return;
+                }
+
+                downloadMapFile(redirectUrl, mapPath, event, mapId)
+                    .then(resolve)
+                    .catch(reject);
+                return;
+            }
+
+            if (response.statusCode !== 200) {
+                response.resume();
+                reject(new Error(`TMX download failed with status ${response.statusCode}`));
+                return;
+            }
+
+            const contentType = response.headers['content-type'];
+            const totalSize = parseInt(response.headers['content-length'], 10);
+            let downloaded = 0;
+            let validated = false;
+            let file = null;
+
+            const handleFailure = (error) => {
+                if (file) {
+                    file.destroy();
+                }
+                response.destroy();
+                cleanupFile(mapPath);
+                reject(error);
+            };
+
+            response.on('data', (chunk) => {
+                if (!validated) {
+                    validated = true;
+
+                    if (isLikelyHtmlResponse(contentType, chunk)) {
+                        handleFailure(new Error('TMX returned an error page instead of a map file'));
+                        return;
+                    }
+
+                    file = fs.createWriteStream(mapPath);
+                    file.on('error', (error) => {
+                        handleFailure(error);
+                    });
+                    file.write(chunk);
+                } else if (file) {
+                    file.write(chunk);
+                }
+
+                downloaded += chunk.length;
+                const progress = totalSize ? Math.round((downloaded / totalSize) * 50) + 10 : 50;
+                event.sender.send('download-progress', { mapId, status: 'downloading', progress });
+            });
+
+            response.on('end', () => {
+                if (!validated) {
+                    reject(new Error('TMX returned an empty response while downloading the map'));
+                    return;
+                }
+
+                if (!file) {
+                    reject(new Error('Unable to create map file for download'));
+                    return;
+                }
+
+                file.end(() => {
+                    log('Download complete');
+                    resolve();
+                });
+            });
+
+            response.on('error', (error) => {
+                handleFailure(error);
+            });
+        });
+
+        request.on('error', (error) => {
+            cleanupFile(mapPath);
+            log(`Download error: ${error.message}`);
+            reject(error);
+        });
+    });
+}
+
 log('Application started');
 
 loadConfig();
@@ -103,8 +222,6 @@ ipcMain.handle('open-trackmania', async (event, mapId) => {
         }
     }
     
-    const https = require('https');
-    
     const downloadUrl = `https://trackmania.exchange/mapgbx/${mapId}`;
     const tempDir = path.join(os.tmpdir(), 'trackmania-maps');
     const mapPath = path.join(tempDir, `${mapId}.Map.Gbx`);
@@ -135,56 +252,7 @@ ipcMain.handle('open-trackmania', async (event, mapId) => {
         log('Starting download...');
         event.sender.send('download-progress', { mapId, status: 'starting', progress: 0 });
         
-        await new Promise((resolve, reject) => {
-            const file = fs.createWriteStream(mapPath);
-            https.get(downloadUrl, (response) => {
-                log(`Download response status: ${response.statusCode}`);
-                event.sender.send('download-progress', { mapId, status: 'downloading', progress: 10 });
-                
-                if (response.statusCode === 302 || response.statusCode === 301) {
-                    log(`Redirect to: ${response.headers.location}`);
-                    https.get(response.headers.location, (redirectResp) => {
-                        const totalSize = parseInt(redirectResp.headers['content-length'], 10);
-                        let downloaded = 0;
-                        
-                        redirectResp.on('data', (chunk) => {
-                            downloaded += chunk.length;
-                            const progress = totalSize ? Math.round((downloaded / totalSize) * 50) + 10 : 50;
-                            event.sender.send('download-progress', { mapId, status: 'downloading', progress });
-                        });
-                        
-                        redirectResp.pipe(file);
-                        file.on('finish', () => {
-                            file.close();
-                            log('Download complete (redirect)');
-                            resolve();
-                        });
-                    }).on('error', (err) => {
-                        log(`Redirect error: ${err.message}`);
-                        reject(err);
-                    });
-                } else {
-                    const totalSize = parseInt(response.headers['content-length'], 10);
-                    let downloaded = 0;
-                    
-                    response.on('data', (chunk) => {
-                        downloaded += chunk.length;
-                        const progress = totalSize ? Math.round((downloaded / totalSize) * 50) + 10 : 50;
-                        event.sender.send('download-progress', { mapId, status: 'downloading', progress });
-                    });
-                    
-                    response.pipe(file);
-                    file.on('finish', () => {
-                        file.close();
-                        log('Download complete');
-                        resolve();
-                    });
-                }
-            }).on('error', (err) => {
-                log(`Download error: ${err.message}`);
-                reject(err);
-            });
-        });
+        await downloadMapFile(downloadUrl, mapPath, event, mapId);
         
         log(`Map file exists: ${fs.existsSync(mapPath)}`);
         if (fs.existsSync(mapPath)) {
@@ -246,6 +314,7 @@ ipcMain.handle('open-trackmania', async (event, mapId) => {
             return { success: true, method: 'shell-open' };
         }
     } catch (error) {
+        cleanupFile(mapPath);
         log(`Error: ${error.message}`);
         log(`Stack: ${error.stack}`);
         event.sender.send('download-progress', { mapId, status: 'error', error: error.message });
