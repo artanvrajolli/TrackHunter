@@ -6,6 +6,7 @@ const os = require('os');
 
 let config = {};
 let cancelDownloadId = null;
+let activeDownloadId = null;
 const configPath = path.join(app.getPath('userData'), 'config.json');
 
 function loadConfig() {
@@ -219,6 +220,13 @@ app.on('activate', () => {
 ipcMain.handle('open-trackmania', async (event, mapId) => {
     log(`open-trackmania called with mapId: ${mapId}`);
     
+    if (activeDownloadId === mapId) {
+        log(`Download already in progress for map: ${mapId}`);
+        return { success: false, error: 'Download already in progress' };
+    }
+    
+    activeDownloadId = mapId;
+    
     let exePath = config.trackmaniaPath;
     
     if (!exePath || !fs.existsSync(exePath)) {
@@ -344,15 +352,18 @@ ipcMain.handle('open-trackmania', async (event, mapId) => {
             await shell.openPath(mapPath);
             log('shell.openPath called');
             event.sender.send('download-progress', { mapId, status: 'complete', progress: 100 });
+            activeDownloadId = null;
             return { success: true, method: 'shell-openPath' };
         } else {
             log(`Exe not found, trying shell.openPath`);
             await shell.openPath(mapPath);
             event.sender.send('download-progress', { mapId, status: 'complete', progress: 100 });
+            activeDownloadId = null;
             return { success: true, method: 'shell-open' };
         }
     } catch (error) {
         cancelDownloadId = null;
+        activeDownloadId = null;
         cleanupFile(mapPath);
         log(`Error: ${error.message}`);
         log(`Stack: ${error.stack}`);

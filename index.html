@@ -1228,7 +1228,26 @@
             if (Number.isNaN(date.getTime())) {
                 return 'Unknown time';
             }
-            return date.toLocaleString();
+            const now = new Date();
+            const diffMs = now - date;
+            const diffSecs = Math.floor(diffMs / 1000);
+            const diffMins = Math.floor(diffSecs / 60);
+            const diffHours = Math.floor(diffMins / 60);
+            const diffDays = Math.floor(diffHours / 24);
+
+            let ago = '';
+            if (diffSecs < 60) {
+                ago = 'Just now';
+            } else if (diffMins < 60) {
+                ago = `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+            } else if (diffHours < 24) {
+                ago = `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+            } else if (diffDays < 7) {
+                ago = `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+            } else {
+                ago = date.toLocaleDateString();
+            }
+            return `${date.toLocaleString()} (${ago})`;
         }
 
         function renderTrackHistory() {
@@ -1569,6 +1588,10 @@ async function fetchMaps() {
         async function handleMapClick(event, mapId, mapName) {
             if (event.ctrlKey) {
                 window.open(`https://trackmania.exchange/tracks/${mapId}`, '_blank');
+                return;
+            }
+            
+            if (activeLaunch && activeLaunch.mapId === mapId) {
                 return;
             }
             
