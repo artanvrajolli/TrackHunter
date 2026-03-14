@@ -499,6 +499,74 @@
             background: rgba(0, 217, 255, 0.1);
         }
 
+        .medals-row {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(0, 217, 255, 0.2);
+        }
+
+        .medal {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 0.7em;
+        }
+
+        .medal-icon {
+            font-size: 1.2em;
+            margin-bottom: 2px;
+        }
+
+        .medal-bronze .medal-icon { color: #cd7f32; }
+        .medal-silver .medal-icon { color: #c0c0c0; }
+        .medal-gold .medal-icon { color: #ffd700; }
+        .medal-author .medal-icon { color: #00d9ff; }
+
+        .medal-time {
+            color: #aaa;
+            font-weight: bold;
+        }
+
+        .map-card.border-white { 
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            box-shadow: inset 4px 0 0 #ffffff, 0 4px 12px rgba(255, 255, 255, 0.15);
+        }
+        .map-card.border-green { 
+            border: 2px solid rgba(0, 255, 136, 0.6);
+            box-shadow: inset 4px 0 0 #00ff88, 0 4px 12px rgba(0, 255, 136, 0.15);
+        }
+        .map-card.border-yellow { 
+            border: 2px solid rgba(255, 221, 0, 0.6);
+            box-shadow: inset 4px 0 0 #ffdd00, 0 4px 12px rgba(255, 221, 0, 0.15);
+        }
+        .map-card.border-red { 
+            border: 2px solid rgba(255, 68, 68, 0.6);
+            box-shadow: inset 4px 0 0 #ff4444, 0 4px 12px rgba(255, 68, 68, 0.15);
+        }
+        .map-card.border-black { 
+            border: 2px solid rgba(0, 0, 0, 0.8);
+            box-shadow: inset 4px 0 0 #000000, 0 4px 12px rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+        .map-card.border-black::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: repeating-linear-gradient(
+                -45deg,
+                #000,
+                #000 3px,
+                #444 3px,
+                #444 6px
+            );
+        }
+
         .cached-indicator {
             position: absolute;
             top: 10px;
@@ -1032,7 +1100,7 @@
 
     <script>
         const API_URL_BASE = 'https://trackmania.exchange/api/maps';
-        const DEFAULT_PARAMS = 'author=Ubisoft+Nadeo&order1=6&count=1000&fields=MapId%2CMapUid%2CName%2CAuthors%5B%5D%2CEnvironment%2CType%2CTags%5B%5D%2CLength%2CDifficulty%2CRoutes%2CAwardCount%2CDownloadCount%2CReplayCount%2CTrackValue%2CIsPublic%2CIsListed%2CVehicle%2CVehicleName%2CHasImages%2CReplayType%2CHasCoauthorRequest%2CAuthorBeaten%2COnlineWR';
+        const DEFAULT_PARAMS = 'author=Ubisoft+Nadeo&order1=6&count=1000&fields=MapId%2CMapUid%2CName%2CAuthors%5B%5D%2CEnvironment%2CType%2CTags%5B%5D%2CLength%2CDifficulty%2CRoutes%2CAwardCount%2CDownloadCount%2CReplayCount%2CTrackValue%2CIsPublic%2CIsListed%2CVehicle%2CVehicleName%2CHasImages%2CReplayType%2CHasCoauthorRequest%2CAuthorBeaten%2COnlineWR%2CMedals.Bronze%2CMedals.Silver%2CMedals.Gold%2CMedals.Author';
         const TRACK_HISTORY_KEY = 'trackLaunchHistory';
         const MAX_TRACK_HISTORY = 20;
         
@@ -1571,8 +1639,26 @@ async function fetchMaps() {
                                 Replays
                             </div>
                         </div>
+                        <div class="medals-row">
+                            <div class="medal medal-bronze">
+                                <span class="medal-icon">🥉</span>
+                                <span class="medal-time">${formatTime(map.Medals?.Bronze)}</span>
+                            </div>
+                            <div class="medal medal-silver">
+                                <span class="medal-icon">🥈</span>
+                                <span class="medal-time">${formatTime(map.Medals?.Silver)}</span>
+                            </div>
+                            <div class="medal medal-gold">
+                                <span class="medal-icon">🥇</span>
+                                <span class="medal-time">${formatTime(map.Medals?.Gold)}</span>
+                            </div>
+                            <div class="medal medal-author">
+                                <span class="medal-icon">⭐</span>
+                                <span class="medal-time">${formatTime(map.Medals?.Author)}</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="click-hint">Click to open in Trackmania • Ctrl+Click to open in browser</div>
+                    <div class="click-hint">🌐 Ctrl+Click to open in browser</div>
                 </div>
             `).join('')}</div>`;
 
@@ -1583,6 +1669,15 @@ async function fetchMaps() {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function formatTime(ms) {
+            if (!ms || ms <= 0) return '--:--';
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            const milliseconds = ms % 1000;
+            return `${minutes}:${seconds.toString().padStart(2, '0')}.${Math.floor(milliseconds / 100)}`;
         }
 
         async function handleMapClick(event, mapId, mapName) {
