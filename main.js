@@ -190,12 +190,86 @@ function saveConfig() {
 
 let mainWindow;
 const logFile = path.join(os.tmpdir(), 'trackmania-viewer.log');
+let localPbCache = null;
+let localPbCacheAt = 0;
+const LOCAL_PB_CACHE_TTL_MS = 60 * 1000;
 
 function log(message) {
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] ${message}\n`;
     fs.appendFileSync(logFile, logMessage);
     console.log(logMessage);
+}
+
+async function loadLocalPersonalBests() {
+    const now = Date.now();
+    if (localPbCache && now - localPbCacheAt < LOCAL_PB_CACHE_TTL_MS) {
+        return localPbCache;
+    }
+
+    const docsDir = app.getPath('documents');
+    const replaysDir = path.join(docsDir, 'Trackmania', 'Replays', 'Autosaves');
+
+    if (!fs.existsSync(replaysDir)) {
+        localPbCache = {};
+        localPbCacheAt = now;
+        return localPbCache;
+    }
+
+    let entries = [];
+    try {
+        entries = await fs.promises.readdir(replaysDir, { withFileTypes: true });
+    } catch (error) {
+        log(`Failed to read replays directory: ${error.message}`);
+        localPbCache = {};
+        localPbCacheAt = now;
+        return localPbCache;
+    }
+
+    const pbFiles = entries
+        .filter(entry => entry.isFile())
+        .map(entry => entry.name)
+        .filter(name => name.toLowerCase().endsWith('.replay.gbx') && name.toLowerCase().includes('personalbest'));
+
+    if (!pbFiles.length) {
+        localPbCache = {};
+        localPbCacheAt = now;
+        return localPbCache;
+    }
+
+    let GBX = null;
+    try {
+        ({ GBX } = await import('gbx'));
+    } catch (error) {
+        log(`Failed to load gbx parser: ${error.message}`);
+        localPbCache = {};
+        localPbCacheAt = now;
+        return localPbCache;
+    }
+
+    const results = {};
+    for (const name of pbFiles) {
+        const filePath = path.join(replaysDir, name);
+        try {
+            const data = await fs.promises.readFile(filePath);
+            const gbx = new GBX(data);
+            const replay = await gbx.parseHeaders();
+            const uid = replay?.mapInfo?.id;
+            const time = replay?.time;
+            if (!uid || typeof time !== 'number' || time <= 0) {
+                continue;
+            }
+            if (!results[uid] || time < results[uid]) {
+                results[uid] = time;
+            }
+        } catch (error) {
+            log(`Failed to parse replay ${name}: ${error.message}`);
+        }
+    }
+
+    localPbCache = results;
+    localPbCacheAt = now;
+    return localPbCache;
 }
 
 function cleanupFile(filePath) {
@@ -583,6 +657,33 @@ ipcMain.handle('select-trackmania-path', async () => {
         }
     }
     return { success: false, canceled: true };
+});
+
+ipcMain.handle('get-tmx-user', async () => {
+    return config.tmxUser || null;
+});
+
+ipcMain.handle('save-tmx-user', async (event, payload) => {
+    try {
+        const name = typeof payload?.name === 'string' ? payload.name.trim() : '';
+        const userId = Number.isFinite(Number(payload?.userId)) ? Number(payload.userId) : null;
+        config.tmxUser = name || userId ? { name, userId } : null;
+        saveConfig();
+        return { success: true };
+    } catch (error) {
+        log(`Error saving TMX user: ${error.message}`);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('get-local-pbs', async () => {
+    try {
+        const pbs = await loadLocalPersonalBests();
+        return { success: true, pbs };
+    } catch (error) {
+        log(`Error loading local PBs: ${error.message}`);
+        return { success: false, error: error.message };
+    }
 });
 
 ipcMain.handle('save-filter-state', async (event, state) => {

@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "electron-store": "^7.0.3",
+    "gbx": "^1.0.0-rc12",
     "gbxremote": "^0.2.1",
     "trackmania.io": "^3.2.2"
   }

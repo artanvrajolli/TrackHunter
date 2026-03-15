@@ -517,6 +517,33 @@
             border-top: 1px solid rgba(0, 255, 136, 0.2);
         }
 
+        .personal-best {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 8px;
+            padding-top: 6px;
+            border-top: 1px dashed rgba(0, 255, 136, 0.2);
+            font-size: 0.75em;
+        }
+
+        .personal-best-label {
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.7em;
+        }
+
+        .personal-best-time {
+            color: #00ff88;
+            font-weight: bold;
+        }
+
+        .personal-best.empty .personal-best-time {
+            color: #666;
+        }
+
         .medal {
             display: flex;
             flex-direction: column;
@@ -537,6 +564,19 @@
         .medal-time {
             color: #aaa;
             font-weight: bold;
+        }
+
+        .medal-claimed .medal-time {
+            color: #00ff88;
+        }
+
+        .medal-claimed .medal-icon {
+            filter: drop-shadow(0 0 4px rgba(0, 255, 136, 0.5));
+        }
+
+        .medal-unclaimed {
+            opacity: 0.45;
+            filter: saturate(0.6);
         }
 
         .map-card.border-white { 
@@ -1098,6 +1138,16 @@
                 <div class="settings-help-text">Select your Trackmania.exe if the game doesn't launch automatically.</div>
             </div>
             <div class="settings-group">
+                <label>TMX Username or User ID</label>
+                <div class="path-input-group">
+                    <input type="text" id="tmxUserInput" placeholder="e.g. Wirtual or 17372">
+                    <button onclick="saveTmxUserSettings()">Save</button>
+                    <button onclick="testTmxUserLookup()">Test</button>
+                </div>
+                <div class="settings-help-text">Used to fetch your personal bests from Trackmania Exchange.</div>
+                <div id="tmxSettingsStatus" class="settings-status"></div>
+            </div>
+            <div class="settings-group">
                 <label>History</label>
                 <button class="settings-danger-btn" onclick="handleClearTrackHistory()">Clear latest played tracks history</button>
                 <div class="settings-help-text">Remove all recently launched tracks from the history drawer.</div>
@@ -1108,7 +1158,10 @@
 
     <script>
         const API_URL_BASE = 'https://trackmania.exchange/api/maps';
-        const DEFAULT_PARAMS = 'author=Ubisoft+Nadeo&order1=6&count=1000&fields=MapId%2CMapUid%2CName%2CAuthors%5B%5D%2CEnvironment%2CType%2CTags%5B%5D%2CLength%2CDifficulty%2CRoutes%2CAwardCount%2CDownloadCount%2CReplayCount%2CTrackValue%2CIsPublic%2CIsListed%2CVehicle%2CVehicleName%2CHasImages%2CReplayType%2CHasCoauthorRequest%2CAuthorBeaten%2COnlineWR%2CMedals.Bronze%2CMedals.Silver%2CMedals.Gold%2CMedals.Author';
+        const DEFAULT_FIELDS_BASE = 'MapId%2CMapUid%2CName%2CAuthors%5B%5D%2CEnvironment%2CType%2CTags%5B%5D%2CLength%2CDifficulty%2CRoutes%2CAwardCount%2CDownloadCount%2CReplayCount%2CTrackValue%2CIsPublic%2CIsListed%2CVehicle%2CVehicleName%2CHasImages%2CReplayType%2CHasCoauthorRequest%2CAuthorBeaten%2COnlineWR%2CMedals.Bronze%2CMedals.Silver%2CMedals.Gold%2CMedals.Author';
+        const DEFAULT_FIELDS_WITH_PB = 'MapId%2CMapUid%2CName%2CAuthors%5B%5D%2CEnvironment%2CType%2CTags%5B%5D%2CLength%2CDifficulty%2CRoutes%2CAwardCount%2CDownloadCount%2CReplayCount%2CTrackValue%2CIsPublic%2CIsListed%2CVehicle%2CVehicleName%2CHasImages%2CReplayType%2CHasCoauthorRequest%2CAuthorBeaten%2COnlineWR%2CUserOnlineRecord.RecordTime%2CUserRecord.ReplayTime%2CMedals.Bronze%2CMedals.Silver%2CMedals.Gold%2CMedals.Author';
+        const DEFAULT_PARAMS_BASE = `author=Ubisoft+Nadeo&order1=6&count=1000&fields=${DEFAULT_FIELDS_BASE}`;
+        const DEFAULT_PARAMS_WITH_PB = `author=Ubisoft+Nadeo&order1=6&count=1000&fields=${DEFAULT_FIELDS_WITH_PB}`;
         const TRACK_HISTORY_KEY = 'trackLaunchHistory';
         const MAX_TRACK_HISTORY = 20;
         
@@ -1118,6 +1171,10 @@
         let sortDirection = 'asc';
         let trackHistory = [];
         let activeLaunch = null;
+        let canRequestPersonalBest = true;
+        let tmxUserName = '';
+        let tmxUserId = null;
+        let localPersonalBests = {};
         
         let colorFilters = {
             white: true,
@@ -1221,10 +1278,17 @@
             });
         }
 
-        function buildApiUrl() {
+        function buildApiUrl(options = {}) {
+            const includePersonalBest = options.includePersonalBest !== false;
+            const replaysBy = options.replaysBy || options.tmxUserId || null;
             const selectedYear = document.getElementById('yearRange').value;
             
-            let url = `${API_URL_BASE}?${DEFAULT_PARAMS}`;
+            const params = includePersonalBest ? DEFAULT_PARAMS_WITH_PB : DEFAULT_PARAMS_BASE;
+            let url = `${API_URL_BASE}?${params}`;
+
+            if (replaysBy) {
+                url += `&replaysby=${encodeURIComponent(replaysBy)}`;
+            }
             
             if (selectedYear) {
                 url += `&uploadedafter=${selectedYear}-01-01&uploadedbefore=${selectedYear}-12-31`;
@@ -1305,6 +1369,177 @@
 
         function saveTrackHistory() {
             localStorage.setItem(TRACK_HISTORY_KEY, JSON.stringify(trackHistory));
+        }
+
+        function setTmxSettingsStatus(message, type) {
+            const status = document.getElementById('tmxSettingsStatus');
+            if (!status) return;
+            status.textContent = message || '';
+            status.className = 'settings-status';
+            if (type) {
+                status.classList.add(type);
+            }
+        }
+
+        async function loadTmxUserSettings() {
+            try {
+                const saved = await window.electronAPI.getTmxUser();
+                if (saved) {
+                    tmxUserName = (saved.name || '').toString();
+                    tmxUserId = saved.userId || null;
+                    const input = document.getElementById('tmxUserInput');
+                    if (input) {
+                        input.value = tmxUserName || (tmxUserId ? String(tmxUserId) : '');
+                    }
+                }
+            } catch (error) {
+                window.electronAPI.log(`Failed to load TMX user settings: ${error.message}`);
+            }
+        }
+
+        async function loadLocalPersonalBests() {
+            try {
+                const result = await window.electronAPI.getLocalPbs();
+                if (result && result.success) {
+                    localPersonalBests = result.pbs || {};
+                    window.electronAPI.log(`Loaded ${Object.keys(localPersonalBests).length} local PBs`);
+                } else {
+                    localPersonalBests = {};
+                    if (result && result.error) {
+                        window.electronAPI.log(`Failed to load local PBs: ${result.error}`);
+                    }
+                }
+            } catch (error) {
+                localPersonalBests = {};
+                window.electronAPI.log(`Failed to load local PBs: ${error.message}`);
+            }
+        }
+
+        async function lookupTmxUserId(rawValue, options = {}) {
+            const value = (rawValue || '').trim();
+            const cacheResult = options.cache === true;
+
+            if (!value) {
+                return { userId: null, name: '', exact: false };
+            }
+
+            if (/^\d+$/.test(value)) {
+                const numericId = parseInt(value, 10);
+                if (!Number.isNaN(numericId)) {
+                    if (cacheResult) {
+                        tmxUserId = numericId;
+                    }
+                    return { userId: numericId, name: value, exact: true };
+                }
+            }
+
+            try {
+                const url = `https://trackmania.exchange/api/users?name=${encodeURIComponent(value)}&fields=UserId%2CName&count=20`;
+                const response = await fetch(url);
+                if (!response.ok) {
+                    window.electronAPI.log(`TMX user lookup failed: HTTP ${response.status}`);
+                    return { userId: null, name: value, exact: false };
+                }
+                const data = await response.json();
+                const results = Array.isArray(data?.Results) ? data.Results : [];
+                if (!results.length) {
+                    return { userId: null, name: value, exact: false };
+                }
+                const exactMatch = results.find(user => (user.Name || '').toLowerCase() === value.toLowerCase());
+                const resolved = exactMatch || results[0];
+                if (resolved?.UserId) {
+                    if (cacheResult) {
+                        tmxUserId = resolved.UserId;
+                    }
+                    return {
+                        userId: resolved.UserId,
+                        name: resolved.Name || value,
+                        exact: Boolean(exactMatch)
+                    };
+                }
+            } catch (error) {
+                window.electronAPI.log(`TMX user lookup error: ${error.message}`);
+            }
+
+            return { userId: null, name: value, exact: false };
+        }
+
+        async function resolveTmxUserId() {
+            const rawValue = (tmxUserName || '').trim();
+            if (!rawValue) {
+                tmxUserId = null;
+                return null;
+            }
+
+            if (tmxUserId && !/^\d+$/.test(rawValue)) {
+                return tmxUserId;
+            }
+
+            const resolved = await lookupTmxUserId(rawValue, { cache: true });
+            if (resolved.userId) {
+                await window.electronAPI.saveTmxUser({ name: rawValue, userId: resolved.userId });
+                return resolved.userId;
+            }
+
+            return null;
+        }
+
+        async function testTmxUserLookup() {
+            const input = document.getElementById('tmxUserInput');
+            if (!input) return;
+
+            const value = input.value.trim();
+            if (!value) {
+                setTmxSettingsStatus('Enter a TMX username or numeric User ID to test.', 'error');
+                return;
+            }
+
+            setTmxSettingsStatus('Testing TMX user lookup...', '');
+
+            const resolved = await lookupTmxUserId(value, { cache: false });
+            if (!resolved.userId) {
+                setTmxSettingsStatus('No TMX user found for that value.', 'error');
+                return;
+            }
+
+            if (/^\d+$/.test(value)) {
+                setTmxSettingsStatus(`TMX user ID ${resolved.userId} is valid.`, 'success');
+                return;
+            }
+
+            const matchNote = resolved.exact ? 'Exact match' : 'Closest match';
+            setTmxSettingsStatus(`${matchNote}: ${resolved.name} (User ID ${resolved.userId}).`, 'success');
+        }
+
+        async function saveTmxUserSettings() {
+            const input = document.getElementById('tmxUserInput');
+            if (!input) return;
+
+            const value = input.value.trim();
+            setTmxSettingsStatus('', '');
+
+            if (!value) {
+                tmxUserName = '';
+                tmxUserId = null;
+                const result = await window.electronAPI.saveTmxUser({ name: '', userId: null });
+                if (result && result.success === false) {
+                    setTmxSettingsStatus(result.error || 'Failed to clear TMX user.', 'error');
+                    return;
+                }
+                setTmxSettingsStatus('TMX user cleared. PBs will be hidden.', 'success');
+                fetchMaps();
+                return;
+            }
+
+            tmxUserName = value;
+            tmxUserId = /^\d+$/.test(value) ? parseInt(value, 10) : null;
+            const result = await window.electronAPI.saveTmxUser({ name: tmxUserName, userId: tmxUserId });
+            if (result && result.success === false) {
+                setTmxSettingsStatus(result.error || 'Failed to save TMX user.', 'error');
+                return;
+            }
+            setTmxSettingsStatus('TMX user saved. Refreshing PBs...', 'success');
+            fetchMaps();
         }
 
         function addTrackToHistory(mapId, mapName) {
@@ -1492,12 +1727,27 @@ async function fetchMaps() {
             content.innerHTML = '<div class="loading">Loading maps</div>';
 
             try {
-                const url = buildApiUrl();
-                window.electronAPI.log(`Fetching maps from: ${url}`);
-                const response = await fetch(url);
+                await loadLocalPersonalBests();
+                const resolvedUserId = tmxUserName ? await resolveTmxUserId() : null;
+                if (tmxUserName && !resolvedUserId) {
+                    setTmxSettingsStatus('TMX user not found. PBs unavailable.', 'error');
+                }
+
+                const urlWithPb = buildApiUrl({ includePersonalBest: canRequestPersonalBest, replaysBy: resolvedUserId });
+                window.electronAPI.log(`Fetching maps from: ${urlWithPb}`);
+                let response = await fetch(urlWithPb);
                 window.electronAPI.log(`Maps API response status: ${response.status}`);
+
+                if (!response.ok && response.status === 400 && canRequestPersonalBest) {
+                    canRequestPersonalBest = false;
+                    const fallbackUrl = buildApiUrl({ includePersonalBest: false, replaysBy: resolvedUserId });
+                    window.electronAPI.log(`PB fields rejected, retrying without PB fields: ${fallbackUrl}`);
+                    response = await fetch(fallbackUrl);
+                    window.electronAPI.log(`Maps API response status (fallback): ${response.status}`);
+                }
+
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                
+
                 const data = await response.json();
                 allMaps = data.Results || [];
                 window.electronAPI.log(`Received ${allMaps.length} maps from API`);
@@ -1637,7 +1887,9 @@ async function fetchMaps() {
                 return;
             }
 
-            const html = `<div class="maps-grid">${maps.map(map => `
+            const html = `<div class="maps-grid">${maps.map(map => {
+                const pbTime = getPersonalBestTime(map);
+                return `
                 <div class="map-card ${getSeasonBorderClass(map.Name)}" onclick="handleMapClick(event, '${map.MapId}', '${map.Name.replace(/'/g, "\\'")}')">
                     ${cachedMapsIds.has(map.MapId) ? `
                     <div class="cached-indicator">
@@ -1669,27 +1921,29 @@ async function fetchMaps() {
                             </div>
                         </div>
                         <div class="medals-row">
-                            <div class="medal medal-bronze">
+                            <div class="medal medal-bronze${getMedalClaimClass(pbTime, map.Medals?.Bronze)}">
                                 <span class="medal-icon">🥉</span>
                                 <span class="medal-time">${formatTime(map.Medals?.Bronze)}</span>
                             </div>
-                            <div class="medal medal-silver">
+                            <div class="medal medal-silver${getMedalClaimClass(pbTime, map.Medals?.Silver)}">
                                 <span class="medal-icon">🥈</span>
                                 <span class="medal-time">${formatTime(map.Medals?.Silver)}</span>
                             </div>
-                            <div class="medal medal-gold">
+                            <div class="medal medal-gold${getMedalClaimClass(pbTime, map.Medals?.Gold)}">
                                 <span class="medal-icon">🥇</span>
                                 <span class="medal-time">${formatTime(map.Medals?.Gold)}</span>
                             </div>
-                            <div class="medal medal-author">
+                            <div class="medal medal-author${getMedalClaimClass(pbTime, map.Medals?.Author)}">
                                 <span class="medal-icon">⭐</span>
                                 <span class="medal-time">${formatTime(map.Medals?.Author)}</span>
                             </div>
                         </div>
+                        ${renderPersonalBest(map)}
                     </div>
                     <div class="click-hint">🌐 Ctrl+Click to open in browser</div>
                 </div>
-            `).join('')}</div>`;
+            `;
+            }).join('')}</div>`;
 
             content.innerHTML = html;
         }
@@ -1707,6 +1961,65 @@ async function fetchMaps() {
             const seconds = totalSeconds % 60;
             const milliseconds = ms % 1000;
             return `${minutes}:${seconds.toString().padStart(2, '0')}.${Math.floor(milliseconds / 100)}`;
+        }
+
+        function normalizeRecordTime(record) {
+            if (!record) return null;
+            if (typeof record === 'number' && record > 0) return record;
+            if (typeof record === 'string') {
+                const parsed = Number(record);
+                if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+            }
+            if (typeof record === 'object') {
+                const candidates = ['RecordTime', 'ReplayTime', 'Time', 'time', 'recordTime', 'Score'];
+                for (const key of candidates) {
+                    const value = record[key];
+                    if (typeof value === 'number' && value > 0) {
+                        return value;
+                    }
+                    if (typeof value === 'string') {
+                        const parsed = Number(value);
+                        if (!Number.isNaN(parsed) && parsed > 0) {
+                            return parsed;
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        function getPersonalBestTime(map) {
+            const localPb = map?.MapUid ? localPersonalBests[map.MapUid] : null;
+            return normalizeRecordTime(map?.UserOnlineRecord?.RecordTime)
+                || normalizeRecordTime(map?.UserRecord?.ReplayTime)
+                || normalizeRecordTime(map?.UserOnlineRecord)
+                || normalizeRecordTime(map?.UserRecord)
+                || normalizeRecordTime(localPb);
+        }
+
+        function getMedalClaimClass(pbTime, medalTime) {
+            const pb = normalizeRecordTime(pbTime);
+            const medal = normalizeRecordTime(medalTime);
+            if (!medal) {
+                return ' medal-unclaimed';
+            }
+            if (pb && pb <= medal) {
+                return ' medal-claimed';
+            }
+            return ' medal-unclaimed';
+        }
+
+        function renderPersonalBest(map) {
+            const pbTime = getPersonalBestTime(map);
+            if (!tmxUserName && !tmxUserId && !pbTime) return '';
+            const displayTime = pbTime ? formatTime(pbTime) : '--:--';
+            const emptyClass = pbTime ? '' : ' empty';
+            return `
+                <div class="personal-best${emptyClass}">
+                    <span class="personal-best-label">PB</span>
+                    <span class="personal-best-time">${displayTime}</span>
+                </div>
+            `;
         }
 
         async function handleMapClick(event, mapId, mapName) {
@@ -1736,6 +2049,7 @@ async function fetchMaps() {
         // Initialize
         async function init() {
             await loadFilterState();
+            await loadTmxUserSettings();
             loadTrackHistory();
             renderTrackHistory();
             setDefaultYearRange();
@@ -1761,6 +2075,7 @@ async function fetchMaps() {
         function openSettings() {
             document.getElementById('settingsOverlay').style.display = 'flex';
             setHistorySettingsStatus('', '');
+            setTmxSettingsStatus('', '');
         }
 
         function closeSettings() {
