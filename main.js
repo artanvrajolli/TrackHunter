@@ -1,13 +1,174 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
+const gbxremote = require('gbxremote');
 
 let config = {};
 let cancelDownloadId = null;
 let activeDownloadId = null;
 const configPath = path.join(app.getPath('userData'), 'config.json');
+
+function getTrackmaniaProcessIds() {
+    try {
+        const output = execSync('tasklist /FI "IMAGENAME eq Trackmania.exe" /FO CSV /NH', { encoding: 'utf8' });
+        const lines = output
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(line => line && !line.startsWith('INFO:'));
+
+        const processIds = [];
+        for (const line of lines) {
+            const normalized = line.replace(/^"|"$/g, '');
+            const parts = normalized.split('","');
+            if (parts.length < 2) {
+                continue;
+            }
+
+            const pid = parseInt(parts[1], 10);
+            if (!Number.isNaN(pid)) {
+                processIds.push(pid);
+            }
+        }
+
+        return processIds;
+    } catch (error) {
+        return [];
+    }
+}
+
+function checkTrackmaniaRunning() {
+    return getTrackmaniaProcessIds().length > 0;
+}
+
+function probeTrackmaniaSessionReady(timeoutMs = 4000) {
+    return new Promise((resolve) => {
+        let settled = false;
+        let client = null;
+        let lastClientError = null;
+
+        const finish = (ready, reason = '') => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            clearTimeout(timeoutHandle);
+            try {
+                if (client) {
+                    client.terminate();
+                }
+            } catch (error) {
+            }
+            resolve({ ready, reason });
+        };
+
+        const timeoutHandle = setTimeout(() => {
+            finish(false, 'gbx-timeout');
+        }, timeoutMs);
+
+        (async () => {
+            try {
+                client = new gbxremote.Client(5000, '127.0.0.1');
+                client.on('error', (error) => {
+                    lastClientError = error;
+                });
+
+                await client.connect(2000);
+
+                const mainPlayer = await client.query('GetMainServerPlayerInfo', []);
+                if (!mainPlayer || !mainPlayer.Login || !mainPlayer.NickName) {
+                    finish(false, 'missing-main-player');
+                    return;
+                }
+
+                const detailedPlayer = await client.query('GetDetailedPlayerInfo', [mainPlayer.Login]);
+                const systemInfo = await client.query('GetSystemInfo', []);
+
+                const playerLogin = String(mainPlayer.Login || '').trim();
+                const serverLogin = String(systemInfo?.ServerLogin || '').trim();
+                const hoursSinceZoneInscription = Number(detailedPlayer?.HoursSinceZoneInscription);
+                const playerRankings = detailedPlayer?.LadderStats?.PlayerRankings;
+                const playerPath = String(detailedPlayer?.Path || '');
+
+                // Trackmania 2020 online account keys are 22-character Base64Url strings (e.g. HSnSHgS2RsuSWjSccf0HHg)
+                // When still loading/offline, it uses a 36-character UUID with hyphens (e.g. bc14c157-f5b3-47bd-9085-2e8d7166adb0)
+                const isOnlineAccount = playerLogin.length > 0 && playerLogin.length < 36 && !playerLogin.includes('-');
+                
+                // When fully authenticated, Path usually resolves to something like "World|Europe|Albania"
+                // rather than just "World" 
+                const hasDetailedPath = playerPath.includes('|');
+
+                // Dump pure telemetry so we can debug exactly what Trackmania reports
+                log(`[GBX Telemetry] Login: ${playerLogin} (${playerLogin.length}), Path: ${playerPath}`);
+
+                const ready = Boolean(
+                    detailedPlayer &&
+                    detailedPlayer.Login &&
+                    detailedPlayer.NickName &&
+                    detailedPlayer.ClientVersion &&
+                    isOnlineAccount && 
+                    hasDetailedPath
+                );
+
+                const reason = ready
+                    ? 'gbx-player-ready'
+                    : `gbx-not-authenticated:loginMatch=${playerLogin === serverLogin};hours=${hoursSinceZoneInscription};hasRanking=${hasRankingData}`;
+
+                finish(ready, reason);
+            } catch (error) {
+                const message = error?.message || lastClientError?.message || 'unknown';
+                finish(false, `gbx-error:${message}`);
+            }
+        })();
+    });
+}
+
+async function waitForTrackmaniaLogin(event, mapId, timeoutMs = 180000) {
+    const pollIntervalMs = 2000;
+    const requiredStableChecks = 3;
+    const maxAttempts = Math.ceil(timeoutMs / pollIntervalMs);
+    let stableChecks = 0;
+
+    event.sender.send('download-progress', {
+        mapId,
+        status: 'login-detecting',
+        progress: 95,
+        attempt: 0,
+        maxAttempts
+    });
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        if (cancelDownloadId !== mapId) {
+            throw new Error('Download cancelled');
+        }
+
+        const probe = await probeTrackmaniaSessionReady();
+        if (probe.ready) {
+            stableChecks += 1;
+            if (stableChecks >= requiredStableChecks) {
+                log(`Automatic login detection succeeded after ${attempt} checks for map ${mapId}`);
+                return;
+            }
+        } else {
+            log(`Login probe check ${attempt}/${maxAttempts} for map ${mapId}: ${probe.reason}`);
+            stableChecks = 0;
+        }
+
+        event.sender.send('download-progress', {
+            mapId,
+            status: 'login-detecting',
+            progress: 95,
+            attempt,
+            maxAttempts
+        });
+
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    }
+
+    throw new Error('Could not confirm Trackmania login in time. Please log in and retry.');
+}
 
 function loadConfig() {
     try {
@@ -226,6 +387,7 @@ ipcMain.handle('open-trackmania', async (event, mapId) => {
     }
     
     activeDownloadId = mapId;
+    cancelDownloadId = mapId;
     
     let exePath = config.trackmaniaPath;
     
@@ -273,15 +435,6 @@ ipcMain.handle('open-trackmania', async (event, mapId) => {
         log(`Created temp dir: ${tempDir}`);
     }
     
-    const checkTrackmaniaRunning = () => {
-        try {
-            const result = require('child_process').execSync('tasklist /FI "IMAGENAME eq Trackmania.exe" /NH', { encoding: 'utf8' });
-            return result.includes('Trackmania.exe');
-        } catch (e) {
-            return false;
-        }
-    };
-    
     let isRunning = checkTrackmaniaRunning();
     log(`Trackmania running: ${isRunning}`);
     
@@ -293,12 +446,9 @@ ipcMain.handle('open-trackmania', async (event, mapId) => {
             event.sender.send('download-progress', { mapId, status: 'cached', progress: 100 });
         } else {
             log('Starting download...');
-            cancelDownloadId = mapId;
             event.sender.send('download-progress', { mapId, status: 'starting', progress: 0 });
             await downloadMapFile(downloadUrl, mapPath, event, mapId);
         }
-        
-        cancelDownloadId = null;
         
         log(`Map file exists: ${fs.existsSync(mapPath)}`);
         if (fs.existsSync(mapPath)) {
@@ -335,29 +485,27 @@ ipcMain.handle('open-trackmania', async (event, mapId) => {
                     const progress = 60 + Math.min(attempts, 35);
                     event.sender.send('download-progress', { mapId, status: 'waiting', progress, attempts });
                 }
-                
-                if (processStarted) {
-                    log('Waiting 15s for login...');
-                    event.sender.send('download-progress', { mapId, status: 'login', progress: 95 });
-                    await new Promise(resolve => setTimeout(resolve, 15000));
-                    log('Login wait complete');
-                } else {
-                    log('Timeout waiting for Trackmania to start');
+
+                if (!processStarted) {
+                    throw new Error('Timeout waiting for Trackmania to start');
                 }
-            } else {
-                event.sender.send('download-progress', { mapId, status: 'launching', progress: 90 });
             }
+
+            await waitForTrackmaniaLogin(event, mapId);
+            event.sender.send('download-progress', { mapId, status: 'launching', progress: 90 });
             
             log(`Opening map: ${mapPath}`);
             await shell.openPath(mapPath);
             log('shell.openPath called');
             event.sender.send('download-progress', { mapId, status: 'complete', progress: 100 });
+            cancelDownloadId = null;
             activeDownloadId = null;
             return { success: true, method: 'shell-openPath' };
         } else {
             log(`Exe not found, trying shell.openPath`);
             await shell.openPath(mapPath);
             event.sender.send('download-progress', { mapId, status: 'complete', progress: 100 });
+            cancelDownloadId = null;
             activeDownloadId = null;
             return { success: true, method: 'shell-open' };
         }
