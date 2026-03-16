@@ -1,2120 +1,4824 @@
 <!DOCTYPE html>
+
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>TrackHunter</title>
+
     <style>
+
         * {
+
             margin: 0;
+
             padding: 0;
+
             box-sizing: border-box;
+
         }
+
+
 
         body {
+
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+
             background: linear-gradient(rgba(0,0,0,0.75), rgba(0,0,0,0.75)), url('background.jpg') no-repeat center center fixed;
+
             background-size: cover;
+
             background-color: #1a1a2e;
+
             color: #e0e0e0;
+
             min-height: 100vh;
+
         }
+
+
 
         /* Modern Filter Bar */
+
         .filter-bar {
+
             background: linear-gradient(180deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.2) 100%);
+
             padding: 15px 20px;
+
             border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+
         }
+
+
 
         .filter-bar-inner {
+
             max-width: 1600px;
+
             margin: 0 auto;
+
             display: flex;
+
             flex-wrap: wrap;
+
             align-items: center;
+
             gap: 15px;
+
         }
+
+
 
         .filter-group {
+
             display: flex;
+
             align-items: center;
+
             gap: 8px;
+
         }
+
+
 
         .filter-group-label {
+
             color: #888;
+
             font-size: 0.75em;
+
             text-transform: uppercase;
+
             letter-spacing: 1px;
+
         }
+
+
 
         .filter-bar select {
+
             padding: 8px 12px;
+
             border: 1px solid rgba(0, 255, 136, 0.4);
+
             border-radius: 6px;
+
             background: rgba(0, 0, 0, 0.5);
+
             color: #e0e0e0;
+
             font-size: 13px;
+
             cursor: pointer;
+
             transition: all 0.2s;
+
         }
+
+
 
         .filter-bar select:hover {
+
             border-color: #00ff88;
+
             box-shadow: 0 0 10px rgba(0, 255, 136, 0.2);
+
         }
+
+
 
         .filter-bar select:focus {
+
             outline: none;
+
             border-color: #00ff88;
+
         }
+
+
 
         .sort-btn {
+
             padding: 6px 10px;
+
             border: 1px solid rgba(0, 255, 136, 0.4);
+
             border-radius: 4px;
+
             background: rgba(0, 0, 0, 0.5);
+
             color: #888;
+
             font-size: 14px;
+
             cursor: pointer;
+
             transition: all 0.2s;
+
         }
+
+
 
         .sort-btn:hover {
+
             border-color: #00ff88;
+
             color: #00ff88;
+
         }
+
+
 
         .sort-btn.active {
+
             background: rgba(0, 255, 136, 0.2);
+
             border-color: #00ff88;
+
             color: #00ff88;
+
         }
+
+
 
         .filter-bar input[type="text"] {
+
             padding: 8px 12px;
+
             border: 1px solid rgba(0, 255, 136, 0.4);
+
             border-radius: 6px;
+
             background: rgba(0, 0, 0, 0.5);
+
             color: #e0e0e0;
+
             font-size: 13px;
+
             width: 150px;
+
             transition: all 0.2s;
+
         }
+
+
 
         .filter-bar input[type="text"]:focus {
+
             outline: none;
+
             border-color: #00ff88;
+
             box-shadow: 0 0 10px rgba(0, 255, 136, 0.2);
+
         }
+
+
 
         .filter-bar input[type="text"]::placeholder {
+
             color: #666;
+
         }
+
+
 
         /* Toggle Switch */
+
         .toggle-container {
+
             display: flex;
+
             align-items: center;
+
             gap: 10px;
+
             cursor: pointer;
+
             padding: 6px 12px;
+
             border-radius: 6px;
+
             background: rgba(0, 0, 0, 0.3);
+
             border: 1px solid rgba(0, 255, 136, 0.2);
+
             transition: all 0.2s;
+
         }
+
+
 
         .toggle-container:hover {
+
             border-color: rgba(0, 255, 136, 0.5);
+
             background: rgba(0, 0, 0, 0.4);
+
         }
+
+
 
         .toggle-switch {
+
             position: relative;
+
             width: 44px;
+
             height: 22px;
+
             background: rgba(0, 0, 0, 0.5);
+
             border: 2px solid rgba(0, 255, 136, 0.3);
+
             border-radius: 22px;
+
             transition: all 0.3s;
+
         }
+
+
 
         .toggle-switch::after {
+
             content: '';
+
             position: absolute;
+
             top: 2px;
+
             left: 2px;
+
             width: 14px;
+
             height: 14px;
+
             background: #666;
+
             border-radius: 50%;
+
             transition: all 0.3s;
+
         }
+
+
 
         .toggle-container.active {
+
             background: rgba(0, 255, 136, 0.1);
+
             border-color: #00ff88;
+
         }
+
+
 
         .toggle-container.active .toggle-switch {
+
             background: rgba(0, 255, 136, 0.3);
+
             border-color: #00ff88;
+
         }
+
+
 
         .toggle-container.active .toggle-switch::after {
+
             left: 24px;
+
             background: #00ff88;
+
             box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+
         }
+
+
 
         .toggle-label {
+
             font-size: 0.85em;
+
             color: #aaa;
+
             transition: color 0.3s;
+
         }
+
+
 
         .toggle-container.active .toggle-label {
+
             color: #00ff88;
+
         }
+
+
 
         /* Quick Filter Chips */
+
         .quick-filters {
+
             display: flex;
+
             gap: 8px;
+
             flex-wrap: wrap;
+
         }
+
+
 
         .filter-chip {
+
             padding: 6px 14px;
+
             border: 1px solid rgba(0, 255, 136, 0.3);
+
             border-radius: 20px;
+
             background: rgba(0, 0, 0, 0.3);
+
             color: #aaa;
+
             font-size: 0.8em;
+
             cursor: pointer;
+
             transition: all 0.2s;
+
             display: flex;
+
             align-items: center;
+
             gap: 6px;
+
         }
+
+
 
         .filter-chip:hover {
+
             border-color: #00ff88;
+
             color: #00ff88;
+
             transform: translateY(-1px);
+
         }
+
+
 
         .filter-chip.active {
+
             background: rgba(0, 255, 136, 0.2);
+
             border-color: #00ff88;
+
             color: #00ff88;
+
         }
+
+
 
         .filter-chip-icon {
+
             font-size: 1.1em;
+
         }
+
+
 
         /* Stats Display */
+
         .filter-stats {
+
             display: flex;
+
             gap: 15px;
+
             margin-left: auto;
+
             padding: 8px 15px;
+
             background: rgba(0, 0, 0, 0.3);
+
             border-radius: 8px;
+
             border: 1px solid rgba(0, 255, 136, 0.1);
+
         }
+
+
 
         .stat-item {
+
             text-align: center;
+
         }
 
+
+
         .stat-value {
+
             font-size: 1.2em;
+
             font-weight: bold;
+
             color: #00ff88;
+
         }
+
+
 
         .stat-label {
+
             font-size: 0.65em;
+
             color: #666;
+
             text-transform: uppercase;
+
             letter-spacing: 1px;
+
         }
+
+
 
         .stat-item.cached .stat-value {
+
             color: #00ff88;
+
         }
+
+
 
         /* Refresh Button */
+
         .refresh-btn {
+
             padding: 8px 16px;
+
             background: linear-gradient(135deg, #00ff88, #00cc66);
+
             border: none;
+
             border-radius: 6px;
+
             color: #1a1a2e;
+
             font-weight: bold;
+
             font-size: 13px;
+
             cursor: pointer;
+
             transition: all 0.2s;
+
             display: flex;
+
             align-items: center;
+
             gap: 6px;
+
             white-space: nowrap;
+
         }
+
+
 
         .refresh-btn:hover {
+
             transform: translateY(-2px);
+
             box-shadow: 0 5px 15px rgba(0, 255, 136, 0.4);
+
         }
+
+
 
         .refresh-btn:active {
+
             transform: translateY(0);
+
         }
+
+
 
         .refresh-btn .refresh-icon {
+
             font-size: 14px;
+
             transition: transform 0.3s;
+
         }
+
+
 
         .refresh-btn.loading .refresh-icon {
+
             animation: spin 1s linear infinite;
+
         }
+
+
 
         @keyframes spin {
+
             from { transform: rotate(0deg); }
+
             to { transform: rotate(360deg); }
+
         }
+
+
 
         /* Loading & Error */
+
         .loading {
+
             text-align: center;
+
             padding: 50px;
+
             font-size: 1.2em;
+
             color: #00ff88;
+
         }
+
+
 
         .loading::after {
+
             content: '';
+
             animation: dots 1.5s infinite;
+
         }
+
+
 
         @keyframes dots {
+
             0%, 20% { content: '.'; }
+
             40% { content: '..'; }
+
             60%, 100% { content: '...'; }
+
         }
+
+
 
         .error {
+
             text-align: center;
+
             padding: 20px;
+
             color: #ff6b6b;
+
             background: rgba(255, 107, 107, 0.1);
+
             margin: 20px;
+
             border-radius: 10px;
+
             border: 1px solid #ff6b6b;
+
         }
+
+
 
         /* Maps Grid */
+
         .maps-grid {
+
             display: grid;
+
             grid-template-columns: repeat(5, 1fr);
+
             gap: 15px;
+
             padding: 20px;
+
             max-width: 1800px;
+
             margin: 0 auto;
+
         }
+
+
 
         .map-card {
+
             background: rgba(0, 0, 0, 0.4);
+
             border-radius: 10px;
+
             overflow: hidden;
+
             border: 1px solid rgba(0, 255, 136, 0.3);
+
             transition: transform 0.2s, box-shadow 0.2s;
+
             cursor: pointer;
+
             position: relative;
+
         }
+
+
 
         .map-card:hover {
+
             box-shadow: 0 10px 30px rgba(0, 255, 136, 0.3);
+
             border-color: #00ff88;
+
         }
+
+
 
         .map-card.border-white { border-bottom: 4px solid #ffffff; }
+
         .map-card.border-green { border-bottom: 4px solid #00ff88; }
+
         .map-card.border-yellow { border-bottom: 4px solid #ffdd00; }
+
         .map-card.border-red { border-bottom: 4px solid #ff4444; }
+
         .map-card.border-black { border-bottom: 4px solid #000000; }
 
+
+
         .color-filter-container {
+
             display: flex;
+
             align-items: center;
+
             gap: 8px;
+
         }
+
         .color-filter-label {
+
             color: #aaa;
+
             font-size: 0.85em;
+
         }
+
         .color-toggles {
+
             display: flex;
+
             gap: 4px;
+
         }
+
         .color-toggle {
+
             width: 24px;
+
             height: 24px;
+
             border-radius: 4px;
+
             cursor: pointer;
+
             opacity: 0.4;
+
             border: 2px solid transparent;
+
             transition: opacity 0.2s, border-color 0.2s;
+
             display: flex;
+
             align-items: center;
+
             justify-content: center;
+
             font-weight: bold;
+
             font-size: 14px;
+
         }
+
         .color-toggle.active {
+
             opacity: 1;
+
             border-color: #fff;
+
         }
+
         .color-toggle:hover {
+
             border-color: #fff;
+
         }
+
         .color-toggle#colorWhite, .color-toggle#colorYellow, .color-toggle#colorGreen {
+
             color: #000;
+
         }
+
         .color-toggle#colorRed, .color-toggle#colorBlack, .color-toggle#colorUnclassified {
+
             color: #fff;
+
         }
+
         
+
         .season-toggle {
+
             width: auto;
+
             min-width: 40px;
+
             height: 28px;
+
             padding: 0 6px;
+
             border-radius: 4px;
+
             cursor: pointer;
+
             opacity: 0.4;
+
             border: 2px solid transparent;
+
             transition: opacity 0.2s, border-color 0.2s;
+
             display: flex;
+
             align-items: center;
+
             justify-content: center;
+
             font-size: 14px;
+
             gap: 4px;
+
         }
+
         .season-toggle .count {
+
             font-size: 11px;
+
             font-weight: bold;
+
             min-width: 16px;
+
             text-align: center;
+
         }
+
         .season-toggle.active {
+
             opacity: 1;
+
             border-color: #fff;
+
         }
+
         .season-toggle:hover {
+
             border-color: #fff;
+
         }
+
+
+
+        /* Medal Filter Slider */
+
+        .medal-filter-container {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 8px;
+
+        }
+
+
+
+        .medal-filter-label {
+
+            color: #aaa;
+
+            font-size: 0.85em;
+
+        }
+
+
+
+        .medal-slider-container {
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 4px;
+
+            min-width: 200px;
+
+        }
+
+
+
+        .medal-slider {
+
+            width: 100%;
+
+            height: 6px;
+
+            border-radius: 3px;
+
+            background: linear-gradient(to right, 
+
+                rgba(255, 255, 255, 0.3) 0%, 
+
+                rgba(205, 127, 50, 0.3) 25%, 
+
+                rgba(192, 192, 192, 0.3) 50%, 
+
+                rgba(255, 215, 0, 0.3) 75%, 
+
+                rgba(0, 255, 136, 0.3) 100%);
+
+            outline: none;
+
+            -webkit-appearance: none;
+
+            cursor: pointer;
+
+        }
+
+
+
+        .medal-slider::-webkit-slider-thumb {
+
+            -webkit-appearance: none;
+
+            appearance: none;
+
+            width: 18px;
+
+            height: 18px;
+
+            border-radius: 50%;
+
+            background: #00ff88;
+
+            cursor: pointer;
+
+            border: 2px solid #1a1a2e;
+
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+
+            transition: all 0.2s;
+
+        }
+
+
+
+        .medal-slider::-webkit-slider-thumb:hover {
+
+            transform: scale(1.1);
+
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.7);
+
+        }
+
+
+
+        .medal-slider::-moz-range-thumb {
+
+            width: 18px;
+
+            height: 18px;
+
+            border-radius: 50%;
+
+            background: #00ff88;
+
+            cursor: pointer;
+
+            border: 2px solid #1a1a2e;
+
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+
+            transition: all 0.2s;
+
+        }
+
+
+
+        .medal-slider::-moz-range-thumb:hover {
+
+            transform: scale(1.1);
+
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.7);
+
+        }
+
+
+
+        .medal-slider-labels {
+
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            padding: 0 2px;
+
+        }
+
+
+
+        .medal-label {
+
+            font-size: 0.75em;
+
+            color: #666;
+
+            transition: all 0.2s;
+
+            cursor: pointer;
+
+            padding: 2px 4px;
+
+            border-radius: 3px;
+
+            user-select: none; /* Prevent text selection */
+
+        }
+
+
+
+        .medal-label.active {
+
+            color: #00ff88;
+
+            background: rgba(0, 255, 136, 0.1);
+
+            font-weight: bold;
+
+        }
+
+
+
+        .medal-label:hover {
+
+            color: #00ff88;
+
+            background: rgba(0, 255, 136, 0.05);
+
+            transform: translateY(-1px);
+
+        }
+
+
 
         .map-image {
+
             width: 100%;
+
             height: 150px;
+
             object-fit: cover;
+
             background: linear-gradient(135deg, #2a2a4a, #1a1a2e);
+
             display: flex;
+
             align-items: center;
+
             justify-content: center;
+
             color: #666;
+
         }
+
+
 
         .map-image img {
+
             width: 100%;
+
             height: 100%;
+
             object-fit: cover;
+
         }
+
+
 
         .map-info {
+
             padding: 15px;
+
         }
+
+
 
         .map-name {
+
             font-size: 1.1em;
+
             font-weight: bold;
+
             color: #00ff88;
+
             margin-bottom: 8px;
+
             word-break: break-word;
+
         }
+
+
 
         .map-details {
+
             font-size: 0.85em;
+
             color: #aaa;
+
             line-height: 1.6;
+
         }
+
+
 
         .map-details span {
+
             display: inline-block;
+
             margin-right: 10px;
+
             margin-bottom: 5px;
+
         }
+
+
 
         .tag {
+
             background: rgba(0, 255, 136, 0.2);
+
             padding: 2px 8px;
+
             border-radius: 3px;
+
             font-size: 0.75em;
+
         }
+
+
 
         .difficulty {
+
             display: inline-block;
+
             padding: 3px 10px;
+
             border-radius: 3px;
+
             font-size: 0.8em;
+
             font-weight: bold;
+
         }
+
+
 
         .diff-beginner { background: #4ade80; color: #000; }
+
         .diff-intermediate { background: #facc15; color: #000; }
+
         .diff-advanced { background: #fb923c; color: #000; }
+
         .diff-expert { background: #ef4444; color: #fff; }
+
         .diff-lunatic { background: #a855f7; color: #fff; }
 
+
+
         .stats {
+
             display: flex;
+
             justify-content: space-between;
+
             margin-top: 10px;
+
             padding-top: 10px;
+
             border-top: 1px solid rgba(0, 255, 136, 0.2);
+
             font-size: 0.8em;
+
         }
+
+
 
         .stat {
+
             text-align: center;
+
         }
+
+
 
         .stat-value {
+
             color: #00ff88;
+
             font-weight: bold;
+
             display: block;
+
         }
+
+
 
         .click-hint {
+
             font-size: 0.75em;
+
             color: #666;
+
             text-align: center;
+
             padding: 8px;
+
             background: rgba(0, 255, 136, 0.1);
+
         }
+
+
 
         .medals-row {
+
             display: flex;
+
             justify-content: center;
+
             gap: 8px;
+
             margin-top: 8px;
+
             padding-top: 8px;
+
             border-top: 1px solid rgba(0, 255, 136, 0.2);
+
         }
+
+
 
         .personal-best {
+
             display: flex;
+
             align-items: center;
+
             justify-content: center;
+
             gap: 6px;
+
             margin-top: 8px;
+
             padding-top: 6px;
+
             border-top: 1px dashed rgba(0, 255, 136, 0.2);
+
             font-size: 0.75em;
+
         }
+
+
 
         .personal-best-label {
+
             color: #888;
+
             text-transform: uppercase;
+
             letter-spacing: 0.5px;
+
             font-size: 0.7em;
+
         }
+
+
 
         .personal-best-time {
+
             color: #00ff88;
+
             font-weight: bold;
+
         }
+
+
 
         .personal-best.empty .personal-best-time {
+
             color: #666;
+
         }
+
+
 
         .medal {
+
             display: flex;
+
             flex-direction: column;
+
             align-items: center;
+
             font-size: 0.7em;
+
         }
+
+
 
         .medal-icon {
+
             font-size: 1.2em;
+
             margin-bottom: 2px;
+
         }
+
+
 
         .medal-bronze .medal-icon { color: #cd7f32; }
+
         .medal-silver .medal-icon { color: #c0c0c0; }
+
         .medal-gold .medal-icon { color: #ffd700; }
+
         .medal-author .medal-icon { color: #00ff88; }
 
+
+
         .medal-time {
+
             color: #aaa;
+
             font-weight: bold;
+
         }
+
+
 
         .medal-claimed .medal-time {
+
             color: #00ff88;
+
         }
+
+
 
         .medal-claimed .medal-icon {
+
             filter: drop-shadow(0 0 4px rgba(0, 255, 136, 0.5));
+
         }
+
+
 
         .medal-unclaimed {
+
             opacity: 0.45;
+
             filter: saturate(0.6);
+
         }
+
+
 
         .map-card.border-white { 
+
             border: 2px solid rgba(255, 255, 255, 0.6);
+
             box-shadow: inset 4px 0 0 #ffffff, 0 4px 12px rgba(255, 255, 255, 0.15);
+
         }
+
         .map-card.border-green { 
+
             border: 2px solid rgba(0, 255, 136, 0.6);
+
             box-shadow: inset 4px 0 0 #00ff88, 0 4px 12px rgba(0, 255, 136, 0.15);
+
         }
+
         .map-card.border-yellow { 
+
             border: 2px solid rgba(255, 221, 0, 0.6);
+
             box-shadow: inset 4px 0 0 #ffdd00, 0 4px 12px rgba(255, 221, 0, 0.15);
+
         }
+
         .map-card.border-red { 
+
             border: 2px solid rgba(255, 68, 68, 0.6);
+
             box-shadow: inset 4px 0 0 #ff4444, 0 4px 12px rgba(255, 68, 68, 0.15);
+
         }
+
         .map-card.border-black { 
+
             border: 2px solid rgba(0, 0, 0, 0.8);
+
             box-shadow: inset 4px 0 0 #000000, 0 4px 12px rgba(0, 0, 0, 0.3);
+
             position: relative;
+
         }
+
         .map-card.border-black::before {
+
             content: '';
+
             position: absolute;
+
             left: 0;
+
             top: 0;
+
             bottom: 0;
+
             width: 4px;
+
             background: repeating-linear-gradient(
+
                 -45deg,
+
                 #000,
+
                 #000 3px,
+
                 #444 3px,
+
                 #444 6px
+
             );
+
         }
+
+
 
         .cached-indicator {
+
             position: absolute;
+
             top: 10px;
+
             right: 10px;
+
             background: rgba(0, 255, 136, 0.9);
+
             color: #000;
+
             padding: 4px 8px;
+
             border-radius: 4px;
+
             font-size: 0.7em;
+
             font-weight: bold;
+
             display: flex;
+
             align-items: center;
+
             gap: 4px;
+
             z-index: 10;
+
         }
+
+
 
         .cached-icon {
+
             width: 12px;
+
             height: 12px;
+
             fill: currentColor;
+
         }
+
+
 
         /* Progress Overlay */
+
         .progress-overlay {
+
             position: fixed;
+
             top: 0;
+
             left: 0;
+
             right: 0;
+
             bottom: 0;
+
             background: rgba(0, 0, 0, 0.8);
+
             display: flex;
+
             align-items: center;
+
             justify-content: center;
+
             z-index: 1000;
+
         }
+
+
 
         .progress-modal {
+
             background: #1a1a2e;
+
             border: 2px solid #00ff88;
+
             border-radius: 10px;
+
             padding: 30px;
+
             text-align: center;
+
             min-width: 300px;
+
         }
+
+
 
         .progress-modal h3 {
+
             color: #00ff88;
+
             margin-bottom: 20px;
+
         }
+
+
 
         .progress-bar-container {
+
             width: 100%;
+
             height: 20px;
+
             background: rgba(0, 0, 0, 0.5);
+
             border-radius: 10px;
+
             overflow: hidden;
+
             margin-bottom: 10px;
+
         }
+
+
 
         .progress-bar {
+
             height: 100%;
+
             background: linear-gradient(90deg, #00ff88, #00ff88);
+
             border-radius: 10px;
+
             transition: width 0.3s ease;
+
         }
+
+
 
         .progress-text {
+
             color: #aaa;
+
             font-size: 0.9em;
+
         }
+
+
 
         /* Responsive */
+
         @media (max-width: 768px) {
+
             .filter-bar-inner {
+
                 justify-content: center;
+
             }
+
             
+
             .filter-stats {
+
                 margin-left: 0;
+
                 width: 100%;
+
                 justify-content: center;
+
             }
+
         }
+
+
 
         /* Settings Modal */
+
         .settings-btn {
+
             background: none;
+
             border: none;
+
             color: #aaa;
+
             font-size: 20px;
+
             cursor: pointer;
+
             padding: 5px;
+
             transition: all 0.2s;
+
             display: flex;
+
             align-items: center;
+
             justify-content: center;
+
         }
+
+
 
         .settings-btn:hover {
+
             color: #00ff88;
+
             transform: rotate(45deg);
+
         }
+
+
+
+        /* Settings Badge */
+
+        .settings-btn-container {
+
+            position: relative;
+
+            display: inline-block;
+
+        }
+
+
+
+        .settings-badge {
+
+            position: absolute;
+
+            top: -6px;
+
+            right: -6px;
+
+            background: linear-gradient(135deg, #ff6b6b, #ff4444);
+
+            color: white;
+
+            font-size: 10px;
+
+            font-weight: bold;
+
+            padding: 2px 6px;
+
+            border-radius: 10px;
+
+            min-width: 16px;
+
+            height: 16px;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            border: 2px solid #1a1a2e;
+
+            box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+
+            animation: pulse 2s infinite;
+
+            z-index: 10;
+
+        }
+
+
+
+        @keyframes pulse {
+
+            0%, 100% { transform: scale(1); }
+
+            50% { transform: scale(1.1); }
+
+        }
+
+
+
+        .settings-btn-container:hover .settings-tooltip {
+
+            opacity: 1;
+
+            visibility: visible;
+
+            transform: translateY(15px);
+
+        }
+
+
+
+        .settings-tooltip {
+
+            position: absolute;
+
+            top: 100%;
+
+            left: 0;
+
+            transform: translateY(10px);
+
+            background: rgba(0, 0, 0, 0.9);
+
+            color: #00ff88;
+
+            padding: 8px 12px;
+
+            border-radius: 6px;
+
+            font-size: 11px;
+
+            white-space: normal;
+
+            border: 1px solid rgba(0, 255, 136, 0.3);
+
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+
+            opacity: 0;
+
+            visibility: hidden;
+
+            transition: all 0.3s ease;
+
+            z-index: 1000;
+
+            pointer-events: none;
+
+            max-width: 250px;
+
+            min-width: 200px;
+
+            text-align: left;
+
+            line-height: 1.4;
+
+        }
+
+
+
+        .settings-tooltip::after {
+
+            content: '';
+
+            position: absolute;
+
+            top: -5px;
+
+            left: 10px;
+
+            transform: translateX(0);
+
+            border: 5px solid transparent;
+
+            border-bottom-color: rgba(0, 255, 136, 0.3);
+
+        }
+
+
 
         .settings-modal-overlay {
+
             position: fixed;
+
             top: 0;
+
             left: 0;
+
             right: 0;
+
             bottom: 0;
+
             background: rgba(0, 0, 0, 0.8);
+
             display: flex;
+
             align-items: center;
+
             justify-content: center;
+
             z-index: 1000;
+
         }
+
+
 
         .settings-modal {
+
             background: #1a1a2e;
+
             border: 1px solid #00ff88;
+
             border-radius: 8px;
+
             padding: 25px;
+
             width: 500px;
+
             max-width: 90vw;
+
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+
         }
+
+
 
         .settings-modal-header {
+
             display: flex;
+
             justify-content: space-between;
+
             align-items: center;
+
             margin-bottom: 20px;
+
             border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+
             padding-bottom: 10px;
+
         }
+
+
 
         .settings-modal-header h2 {
+
             margin: 0;
+
             color: #00ff88;
+
             font-size: 1.2em;
+
         }
+
+
 
         .close-btn {
+
             background: none;
+
             border: none;
+
             color: #aaa;
+
             font-size: 24px;
+
             cursor: pointer;
+
             line-height: 1;
+
         }
+
+
 
         .close-btn:hover {
+
             color: #ff4444;
+
         }
+
+
 
         .settings-group {
+
             margin-bottom: 20px;
+
         }
+
+
 
         .settings-group label {
+
             display: block;
+
             margin-bottom: 8px;
+
             color: #aaa;
+
             font-size: 0.9em;
+
         }
+
+
 
         .path-input-group {
+
             display: flex;
+
             gap: 10px;
+
         }
+
+
 
         .path-input-group input {
+
             flex: 1;
+
             padding: 8px 12px;
+
             background: rgba(0, 0, 0, 0.5);
+
             border: 1px solid rgba(0, 255, 136, 0.3);
+
             border-radius: 4px;
+
             color: #e0e0e0;
+
             font-size: 0.9em;
+
         }
+
+
 
         .path-input-group button {
+
             padding: 8px 15px;
+
             background: rgba(0, 255, 136, 0.2);
+
             border: 1px solid #00ff88;
+
             border-radius: 4px;
+
             color: #00ff88;
+
             cursor: pointer;
+
             transition: all 0.2s;
+
             white-space: nowrap;
+
         }
+
+
 
         .path-input-group button:hover {
+
             background: rgba(0, 255, 136, 0.3);
+
         }
+
+
 
         .settings-help-text {
+
             margin-top: 5px;
+
             font-size: 0.8em;
+
             color: #666;
+
         }
+
+
 
         .settings-status {
+
             margin-top: 10px;
+
             font-size: 0.85em;
+
             min-height: 18px;
+
         }
+
+
 
         .settings-status.success {
+
             color: #00ff88;
+
         }
+
+
 
         .settings-status.error {
+
             color: #ff8c8c;
+
         }
+
+
 
         .history-btn {
+
             padding: 9px 16px;
+
             background: linear-gradient(135deg, rgba(0, 255, 136, 0.22), rgba(0, 200, 100, 0.16));
+
             border: 1px solid rgba(0, 255, 136, 0.45);
+
             border-radius: 999px;
+
             color: #dffbff;
+
             font-size: 13px;
+
             font-weight: 700;
+
             letter-spacing: 0.04em;
+
             text-transform: uppercase;
+
             cursor: pointer;
+
             box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04) inset, 0 6px 18px rgba(0, 255, 136, 0.12);
+
             transition: all 0.2s;
+
         }
+
+
 
         .history-btn:hover {
+
             border-color: #5cecff;
+
             background: linear-gradient(135deg, rgba(0, 255, 136, 0.3), rgba(0, 200, 100, 0.2));
+
             box-shadow: 0 10px 24px rgba(0, 255, 136, 0.22);
+
             transform: translateY(-1px);
+
         }
+
+
 
         .history-btn:active {
+
             transform: translateY(0);
+
             box-shadow: 0 4px 12px rgba(0, 255, 136, 0.16);
+
         }
+
+
 
         .history-drawer-overlay {
+
             position: fixed;
+
             top: 0;
+
             left: 0;
+
             right: 0;
+
             bottom: 0;
+
             background: rgba(0, 0, 0, 0.45);
+
             opacity: 0;
+
             pointer-events: none;
+
             transition: opacity 0.25s ease;
+
             z-index: 950;
+
         }
+
+
 
         .history-drawer-overlay.open {
+
             opacity: 1;
+
             pointer-events: auto;
+
         }
+
+
 
         .history-drawer {
+
             position: fixed;
+
             top: 0;
+
             right: 0;
+
             width: 380px;
+
             max-width: 90vw;
+
             height: 100vh;
+
             background: #10101c;
+
             border-left: 1px solid rgba(0, 255, 136, 0.25);
+
             box-shadow: -10px 0 30px rgba(0, 0, 0, 0.45);
+
             transform: translateX(100%);
+
             transition: transform 0.25s ease;
+
             z-index: 960;
+
             display: flex;
+
             flex-direction: column;
+
         }
+
+
 
         .history-drawer.open {
+
             transform: translateX(0);
+
         }
+
+
 
         .history-drawer-header {
+
             display: flex;
+
             align-items: center;
+
             justify-content: space-between;
+
             padding: 18px 20px;
+
             border-bottom: 1px solid rgba(0, 255, 136, 0.15);
+
         }
+
+
 
         .history-drawer-header h2 {
+
             color: #00ff88;
+
             font-size: 1.1em;
+
         }
+
+
 
         .history-drawer-body {
+
             flex: 1;
+
             overflow-y: auto;
+
             padding: 16px;
+
         }
+
+
 
         .history-empty {
+
             padding: 24px 16px;
+
             text-align: center;
+
             color: #777;
+
             border: 1px dashed rgba(0, 255, 136, 0.2);
+
             border-radius: 10px;
+
             background: rgba(255, 255, 255, 0.02);
+
         }
+
+
 
         .history-list {
+
             display: flex;
+
             flex-direction: column;
+
             gap: 12px;
+
         }
+
+
 
         .history-item {
+
             background: rgba(255, 255, 255, 0.03);
+
             border: 1px solid rgba(0, 255, 136, 0.14);
+
             border-radius: 10px;
+
             cursor: pointer;
+
             transition: all 0.2s;
+
             position: relative;
+
             overflow: hidden;
+
             min-height: 120px;
+
         }
+
+
 
         .history-item:hover {
+
             border-color: rgba(0, 255, 136, 0.4);
+
             background: rgba(0, 255, 136, 0.06);
+
         }
+
+
 
         .history-item-thumb {
+
             position: absolute;
+
             inset: 0;
+
             background: linear-gradient(135deg, #2a2a4a, #1a1a2e);
+
         }
+
+
 
         .history-item-thumb img {
+
             width: 100%;
+
             height: 100%;
+
             object-fit: cover;
+
             display: block;
+
         }
+
+
 
         .history-item-thumb::after {
+
             content: '';
+
             position: absolute;
+
             inset: 0;
+
             background: linear-gradient(180deg, rgba(8, 10, 20, 0.18) 0%, rgba(8, 10, 20, 0.88) 100%);
+
         }
+
+
 
         .history-item-content {
+
             position: relative;
+
             z-index: 1;
+
             min-width: 0;
+
             min-height: 120px;
+
             display: flex;
+
             flex-direction: column;
+
             justify-content: flex-end;
+
             padding: 16px;
+
         }
+
+
 
         .history-item-name {
+
             color: #e8faff;
+
             font-weight: 600;
+
             margin-bottom: 8px;
+
             word-break: break-word;
+
             text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+
         }
+
+
 
         .history-item-meta {
+
             display: flex;
+
             justify-content: space-between;
+
             gap: 10px;
+
             color: #d8e8f2;
+
             font-size: 0.8em;
+
             text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+
         }
+
+
 
         .history-drawer-footer {
+
             padding: 16px 20px;
+
             border-top: 1px solid rgba(0, 255, 136, 0.15);
+
         }
+
+
 
         .history-clear-btn {
+
             width: 100%;
+
             padding: 10px 14px;
+
             background: rgba(255, 68, 68, 0.12);
+
             border: 1px solid rgba(255, 68, 68, 0.35);
+
             border-radius: 6px;
+
             color: #ff8c8c;
+
             cursor: pointer;
+
             transition: all 0.2s;
+
         }
+
+
 
         .history-clear-btn:hover {
+
             background: rgba(255, 68, 68, 0.18);
+
             border-color: rgba(255, 68, 68, 0.55);
+
         }
+
     </style>
+
 </head>
+
 <body>
 
+
+
     <div class="filter-bar">
+
         <div class="filter-bar-inner">
-            <!-- Year Filter -->
-            <div class="filter-group">
-                <span class="filter-group-label">📅 Year</span>
-                <select id="yearRange" title="Select year"></select>
+
+            <!-- Settings Button -->
+
+            <div class="settings-btn-container" id="settingsBtnContainer">
+
+                <button class="settings-btn" onclick="openSettings()" title="Settings">⚙️</button>
+
+                <div class="settings-badge" id="settingsBadge">!</div>
+
+                <div class="settings-tooltip" id="settingsTooltip">
+
+                    Add a TMX username to unlock medal filtering features and see your personal bests!
+
+                </div>
+
             </div>
+
+
+
+            <!-- Year Filter -->
+
+            <div class="filter-group">
+
+                <span class="filter-group-label">📅 Year</span>
+
+                <select id="yearRange" title="Select year"></select>
+
+            </div>
+
+
 
             <!-- Search Input -->
+
             <div class="filter-group">
+
                 <span class="filter-group-label">🔍 Search</span>
+
                 <input type="text" id="searchInput" placeholder="Map name..." oninput="saveFilterState(); applyFilters()">
+
             </div>
+
+
 
             <!-- Sort Dropdown -->
+
             <div class="filter-group">
+
                 <span class="filter-group-label">↕️ Sort</span>
+
                 <select id="sortSelect" onchange="saveFilterState(); applyFilters()">
+
                     <option value="mapId" selected>Map ID</option>
+
                     <option value="natural">Number (1, 2, ..., 10)</option>
+
                     <option value="name">Name (A-Z)</option>
+
                     <option value="downloads">Downloads</option>
+
                     <option value="awards">Awards</option>
+
                     <option value="difficulty">Difficulty</option>
+
                 </select>
+
                 <button class="sort-btn asc active" id="sortBtn" onclick="toggleSortDirection()" title="Toggle Ascending/Descending">↑</button>
+
             </div>
+
+
 
             <!-- Cached Include Toggle -->
+
             <div class="toggle-container active" id="cachedToggle" onclick="toggleIncludeCached()" title="Include cached maps">
+
                 <div class="toggle-switch"></div>
+
                 <span class="toggle-label">💾 Cached Include</span>
+
             </div>
+
+
 
             <!-- Color Filter -->
+
             <div class="color-filter-container">
+
                 <span class="color-filter-label">Track Colors:</span>
+
                 <div class="color-toggles">
+
                     <div class="color-toggle active" id="colorWhite" onclick="toggleColorFilter('white')" style="background:#ffffff;" title="White (1-5)">✓</div>
+
                     <div class="color-toggle active" id="colorGreen" onclick="toggleColorFilter('green')" style="background:#00ff88;" title="Green (6-10)">✓</div>
+
                     <div class="color-toggle active" id="colorYellow" onclick="toggleColorFilter('yellow')" style="background:#ffdd00;" title="Yellow (11-15)">✓</div>
+
                     <div class="color-toggle active" id="colorRed" onclick="toggleColorFilter('red')" style="background:#ff4444;" title="Red (16-20)">✓</div>
+
                     <div class="color-toggle active" id="colorBlack" onclick="toggleColorFilter('black')" style="background: repeating-linear-gradient(-45deg, #000, #000 2px, #444 2px, #444 4px);" title="Black (21-25)">✓</div>
+
                     <div class="color-toggle active" id="colorUnclassified" onclick="toggleColorFilter('unclassified')" style="background:#666666;" title="Unclassified">?</div>
+
                 </div>
+
             </div>
+
+
 
             <!-- Season Filter -->
+
             <div class="color-filter-container">
+
                 <span class="color-filter-label">Seasons:</span>
+
                 <div class="color-toggles">
+
                     <div class="season-toggle active" id="seasonWinter" onclick="toggleSeasonFilter('Winter')" title="Winter"><span class="icon">❄️</span><span class="count" id="countWinter">0</span></div>
+
                     <div class="season-toggle active" id="seasonSpring" onclick="toggleSeasonFilter('Spring')" title="Spring"><span class="icon">🌸</span><span class="count" id="countSpring">0</span></div>
+
                     <div class="season-toggle active" id="seasonSummer" onclick="toggleSeasonFilter('Summer')" title="Summer"><span class="icon">☀️</span><span class="count" id="countSummer">0</span></div>
+
                     <div class="season-toggle active" id="seasonAutumn" onclick="toggleSeasonFilter('Autumn')" title="Fall"><span class="icon">🍂</span><span class="count" id="countAutumn">0</span></div>
+
                 </div>
+
             </div>
 
-            <!-- Stats -->
-            <div class="filter-stats">
-                <div class="stat-item">
-                    <span class="stat-value" id="totalMapsCount">0</span>
-                    <span class="stat-label">Total</span>
+
+
+            <!-- Medal Filter -->
+
+            <div class="medal-filter-container" id="medalFilterContainer" style="display: none;">
+
+                <span class="medal-filter-label">Unbeaten:</span>
+
+                <div class="medal-slider-container">
+
+                    <input type="range" id="medalSlider" min="0" max="4" value="0" class="medal-slider" oninput="updateMedalFilter(this.value)">
+
+                    <div class="medal-slider-labels">
+
+                        <span class="medal-label" data-value="0" title="Show all maps" onclick="setMedalFilter(0)">All</span>
+
+                        <span class="medal-label" data-value="1" title="Maps where you haven't beaten Bronze time" onclick="setMedalFilter(1)">🥉</span>
+
+                        <span class="medal-label" data-value="2" title="Maps where you haven't beaten Silver time" onclick="setMedalFilter(2)">🥈</span>
+
+                        <span class="medal-label" data-value="3" title="Maps where you haven't beaten Gold time" onclick="setMedalFilter(3)">🥇</span>
+
+                        <span class="medal-label" data-value="4" title="Maps where you haven't beaten Author time" onclick="setMedalFilter(4)">⭐</span>
+
+                    </div>
+
                 </div>
-                <div class="stat-item">
-                    <span class="stat-value" id="filteredMapsCount">0</span>
-                    <span class="stat-label">Showing</span>
-                </div>
+
             </div>
+
+
+
+            <!-- Stats -->
+
+            <div class="filter-stats">
+
+                <div class="stat-item">
+
+                    <span class="stat-value" id="totalMapsCount">0</span>
+
+                    <span class="stat-label">Total</span>
+
+                </div>
+
+                <div class="stat-item">
+
+                    <span class="stat-value" id="filteredMapsCount">0</span>
+
+                    <span class="stat-label">Showing</span>
+
+                </div>
+
+            </div>
+
+
 
             <button class="history-btn" onclick="openHistoryDrawer()" title="Open launch history">History</button>
 
-            <!-- Settings Button -->
-            <button class="settings-btn" onclick="openSettings()" title="Settings">⚙️</button>
         </div>
+
     </div>
+
+
 
     <div id="content">
+
         <div class="loading">Loading maps</div>
+
     </div>
 
+
+
     <div id="progressOverlay" class="progress-overlay" style="display: none;">
+
         <div class="progress-modal">
+
             <h3 id="progressTitle">Downloading Map...</h3>
+
             <div class="progress-bar-container">
+
                 <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+
             </div>
+
             <div class="progress-text" id="progressText">Starting...</div>
+
         </div>
+
     </div>
+
+
 
     <div id="historyDrawerOverlay" class="history-drawer-overlay" onclick="closeHistoryDrawer()"></div>
 
+
+
     <aside id="historyDrawer" class="history-drawer" aria-hidden="true">
+
         <div class="history-drawer-header">
+
             <h2>Latest Played Tracks</h2>
+
             <button class="close-btn" onclick="closeHistoryDrawer()">&times;</button>
+
         </div>
+
         <div class="history-drawer-body">
+
             <div id="historyList"></div>
+
         </div>
+
     </aside>
 
+
+
     <!-- Settings Modal -->
+
     <div id="settingsOverlay" class="settings-modal-overlay" style="display: none;">
+
         <div class="settings-modal">
+
             <div class="settings-modal-header">
+
                 <h2>Settings</h2>
+
                 <button class="close-btn" onclick="closeSettings()">&times;</button>
+
             </div>
+
             <div class="settings-group">
+
                 <label>Trackmania Executable Path</label>
+
                 <div class="path-input-group">
+
                     <input type="text" id="trackmaniaPathInput" readonly placeholder="Auto-detect or select path...">
+
                     <button onclick="selectTrackmaniaPath()">Browse...</button>
+
                 </div>
+
                 <div class="settings-help-text">Select your Trackmania.exe if the game doesn't launch automatically.</div>
+
             </div>
+
             <div class="settings-group">
+
                 <label>TMX Username or User ID</label>
+
                 <div class="path-input-group">
+
                     <input type="text" id="tmxUserInput" placeholder="e.g. Wirtual or 17372">
+
                     <button onclick="saveTmxUserSettings()">Save</button>
-                    <button onclick="testTmxUserLookup()">Test</button>
+
                 </div>
-                <div class="settings-help-text">Used to fetch your personal bests from Trackmania Exchange.</div>
+
+                <div class="settings-help-text">Enter a TMX username or numeric User ID to fetch your personal bests. The username will be tested before saving.</div>
+
                 <div id="tmxSettingsStatus" class="settings-status"></div>
+
             </div>
+
             <div class="settings-group">
+
                 <label>History</label>
+
                 <button class="settings-danger-btn" onclick="handleClearTrackHistory()">Clear latest played tracks history</button>
+
                 <div class="settings-help-text">Remove all recently launched tracks from the history drawer.</div>
+
                 <div id="historySettingsStatus" class="settings-status"></div>
+
             </div>
+
         </div>
+
     </div>
 
+
+
     <script>
+
         const API_URL_BASE = 'https://trackmania.exchange/api/maps';
+
         const DEFAULT_FIELDS_BASE = 'MapId%2CMapUid%2CName%2CAuthors%5B%5D%2CEnvironment%2CType%2CTags%5B%5D%2CLength%2CDifficulty%2CRoutes%2CAwardCount%2CDownloadCount%2CReplayCount%2CTrackValue%2CIsPublic%2CIsListed%2CVehicle%2CVehicleName%2CHasImages%2CReplayType%2CHasCoauthorRequest%2CAuthorBeaten%2COnlineWR%2CMedals.Bronze%2CMedals.Silver%2CMedals.Gold%2CMedals.Author';
+
         const DEFAULT_FIELDS_WITH_PB = 'MapId%2CMapUid%2CName%2CAuthors%5B%5D%2CEnvironment%2CType%2CTags%5B%5D%2CLength%2CDifficulty%2CRoutes%2CAwardCount%2CDownloadCount%2CReplayCount%2CTrackValue%2CIsPublic%2CIsListed%2CVehicle%2CVehicleName%2CHasImages%2CReplayType%2CHasCoauthorRequest%2CAuthorBeaten%2COnlineWR%2CUserOnlineRecord.RecordTime%2CUserRecord.ReplayTime%2CMedals.Bronze%2CMedals.Silver%2CMedals.Gold%2CMedals.Author';
+
         const DEFAULT_PARAMS_BASE = `author=Ubisoft+Nadeo&order1=6&count=1000&fields=${DEFAULT_FIELDS_BASE}`;
+
         const DEFAULT_PARAMS_WITH_PB = `author=Ubisoft+Nadeo&order1=6&count=1000&fields=${DEFAULT_FIELDS_WITH_PB}`;
+
         const TRACK_HISTORY_KEY = 'trackLaunchHistory';
+
         const MAX_TRACK_HISTORY = 20;
+
         
+
         let allMaps = [];
+
         let cachedMapsIds = new Set();
+
         let includeCached = true;
+
         let sortDirection = 'asc';
+
         let trackHistory = [];
+
         let activeLaunch = null;
+
         let canRequestPersonalBest = true;
+
         let tmxUserName = '';
+
         let tmxUserId = null;
+
         let localPersonalBests = {};
+
         
+
         let colorFilters = {
+
             white: true,
+
             green: true,
+
             yellow: true,
+
             red: true,
+
             black: true,
+
             unclassified: true
+
         };
+
         
+
         let seasonFilters = {
+
             Winter: true,
+
             Spring: true,
+
             Summer: true,
+
             Autumn: true
+
         };
+
+
+
+        let medalFilter = 0; // 0 = All (show all), 1 = Haven't beaten Bronze, 2 = Haven't beaten Silver, 3 = Haven't beaten Gold, 4 = Haven't beaten Author
+
+
 
         // Save filter state to electron-store
+
         async function saveFilterState() {
+
             const state = {
+
                 includeCached,
+
                 sortDirection,
+
                 sortBy: document.getElementById('sortSelect').value,
+
                 yearRange: document.getElementById('yearRange').value,
+
                 searchTerm: document.getElementById('searchInput').value,
+
                 colorFilters,
-                seasonFilters
+
+                seasonFilters,
+
+                medalFilter
+
             };
+
             await window.electronAPI.saveFilterState(state);
+
         }
+
+
 
         // Load filter state from electron-store
+
         async function loadFilterState() {
+
             const saved = await window.electronAPI.loadFilterState();
+
             if (saved) {
+
                 try {
+
                     if (saved.includeCached !== undefined) includeCached = saved.includeCached;
+
                     if (saved.sortDirection !== undefined) sortDirection = saved.sortDirection;
+
                     if (saved.sortBy) window._savedSortBy = saved.sortBy;
+
                     if (saved.yearRange) window._savedYearRange = saved.yearRange;
+
                     if (saved.searchTerm) window._savedSearchTerm = saved.searchTerm;
+
                     if (saved.colorFilters) Object.assign(colorFilters, saved.colorFilters);
+
                     if (saved.seasonFilters) Object.assign(seasonFilters, saved.seasonFilters);
+
+                    if (saved.medalFilter !== undefined) medalFilter = saved.medalFilter;
+
                 } catch (e) {}
+
             }
+
         }
+
+
 
         // Apply loaded filter state to UI
+
         function applyFilterStateToUI() {
+
             document.getElementById('cachedToggle').classList.toggle('active', includeCached);
+
             const sortBtn = document.getElementById('sortBtn');
+
             sortBtn.classList.toggle('asc', sortDirection === 'asc');
+
             sortBtn.classList.toggle('desc', sortDirection === 'desc');
+
             sortBtn.textContent = sortDirection === 'asc' ? '↑' : '↓';
+
             
+
             if (window._savedSortBy) {
+
                 document.getElementById('sortSelect').value = window._savedSortBy;
+
             }
+
             if (window._savedYearRange) {
+
                 document.getElementById('yearRange').value = window._savedYearRange;
+
             }
+
             if (window._savedSearchTerm) {
+
                 document.getElementById('searchInput').value = window._savedSearchTerm;
+
             }
+
             
+
             document.getElementById('colorWhite').classList.toggle('active', colorFilters.white);
+
             document.getElementById('colorGreen').classList.toggle('active', colorFilters.green);
+
             document.getElementById('colorYellow').classList.toggle('active', colorFilters.yellow);
+
             document.getElementById('colorRed').classList.toggle('active', colorFilters.red);
+
             document.getElementById('colorBlack').classList.toggle('active', colorFilters.black);
+
             document.getElementById('colorUnclassified').classList.toggle('active', colorFilters.unclassified);
+
             
+
             document.getElementById('seasonWinter').classList.toggle('active', seasonFilters.Winter);
+
             document.getElementById('seasonSpring').classList.toggle('active', seasonFilters.Spring);
+
             document.getElementById('seasonSummer').classList.toggle('active', seasonFilters.Summer);
+
             document.getElementById('seasonAutumn').classList.toggle('active', seasonFilters.Autumn);
+
+            
+
+            // Apply medal filter state
+
+            const medalSlider = document.getElementById('medalSlider');
+
+            if (medalSlider) {
+
+                medalSlider.value = medalFilter;
+
+                updateMedalFilter(medalFilter, false); // false = don't save state
+
+            }
+
         }
+
+
 
         // Set default year range and populate dropdown
+
         function setDefaultYearRange() {
+
             const currentYear = new Date().getFullYear();
+
             const yearRangeSelect = document.getElementById('yearRange');
+
             
+
             // Add "All Years" option
+
             yearRangeSelect.add(new Option('📅 All Years', ''));
+
             
+
             // Populate individual year options from 2020 to current year
+
             for (let year = currentYear; year >= 2020; year--) {
+
                 yearRangeSelect.add(new Option(`${year}`, `${year}`));
+
             }
+
             
+
             // Set default to current year
+
             if (!window._savedYearRange) {
+
                 yearRangeSelect.value = `${currentYear}`;
+
             }
+
             
+
             // Add change listener to refresh on year change
+
             yearRangeSelect.addEventListener('change', () => {
+
                 saveFilterState();
+
                 fetchMaps();
+
             });
+
         }
+
+
 
         function buildApiUrl(options = {}) {
+
             const includePersonalBest = options.includePersonalBest !== false;
+
             const replaysBy = options.replaysBy || options.tmxUserId || null;
+
             const selectedYear = document.getElementById('yearRange').value;
+
             
+
             const params = includePersonalBest ? DEFAULT_PARAMS_WITH_PB : DEFAULT_PARAMS_BASE;
+
             let url = `${API_URL_BASE}?${params}`;
 
+
+
             if (replaysBy) {
+
                 url += `&replaysby=${encodeURIComponent(replaysBy)}`;
+
             }
+
             
+
             if (selectedYear) {
+
                 url += `&uploadedafter=${selectedYear}-01-01&uploadedbefore=${selectedYear}-12-31`;
+
             }
+
             
+
             return url;
+
         }
+
+
 
         // Toggle include cached maps
+
         function toggleIncludeCached() {
+
             includeCached = !includeCached;
+
             const toggle = document.getElementById('cachedToggle');
+
             toggle.classList.toggle('active', includeCached);
+
             saveFilterState();
+
             applyFilters();
+
         }
+
+
 
         // Toggle color filter
+
         function toggleColorFilter(color) {
+
             colorFilters[color] = !colorFilters[color];
+
             document.getElementById('color' + color.charAt(0).toUpperCase() + color.slice(1)).classList.toggle('active', colorFilters[color]);
+
             saveFilterState();
+
             applyFilters();
+
         }
+
+
 
         // Toggle season filter
+
         function toggleSeasonFilter(season) {
+
             seasonFilters[season] = !seasonFilters[season];
+
             document.getElementById('season' + season).classList.toggle('active', seasonFilters[season]);
+
             saveFilterState();
+
             applyFilters();
+
         }
+
+
+
+        // Update medal filter
+
+        function updateMedalFilter(value, saveState = true) {
+
+            medalFilter = parseInt(value, 10);
+
+            
+
+            // Update slider value
+
+            const medalSlider = document.getElementById('medalSlider');
+
+            if (medalSlider) {
+
+                medalSlider.value = medalFilter;
+
+            }
+
+            
+
+            // Update label highlights
+
+            const labels = document.querySelectorAll('.medal-label');
+
+            labels.forEach(label => {
+
+                const labelValue = parseInt(label.getAttribute('data-value'), 10);
+
+                label.classList.toggle('active', labelValue <= medalFilter);
+
+            });
+
+            
+
+            if (saveState) {
+
+                saveFilterState();
+
+                applyFilters();
+
+            }
+
+        }
+
+
+
+        // Set medal filter directly (for label clicks)
+
+        function setMedalFilter(value) {
+
+            updateMedalFilter(value, true);
+
+        }
+
+
+
+        // Show/hide medal filter based on TMX user
+
+        function updateMedalFilterVisibility() {
+
+            const medalContainer = document.getElementById('medalFilterContainer');
+
+            const hasTmxUser = tmxUserName || tmxUserId;
+
+            
+
+            if (medalContainer) {
+
+                medalContainer.style.display = hasTmxUser ? 'flex' : 'none';
+
+            }
+
+        }
+
+
+
+        // Update settings badge based on TMX user status
+
+        function updateSettingsBadge() {
+
+            const badge = document.getElementById('settingsBadge');
+
+            const tooltip = document.getElementById('settingsTooltip');
+
+            const hasTmxUser = tmxUserName || tmxUserId;
+
+            
+
+            if (badge && tooltip) {
+
+                if (hasTmxUser) {
+
+                    // Hide badge when TMX user is configured
+
+                    badge.style.display = 'none';
+
+                    tooltip.style.display = 'none';
+
+                } else {
+
+                    // Show badge when no TMX user is configured
+
+                    badge.style.display = 'flex';
+
+                    tooltip.style.display = 'block';
+
+                }
+
+            }
+
+        }
+
+
 
         // Set sort direction
+
         function toggleSortDirection() {
+
             sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+
             const btn = document.getElementById('sortBtn');
+
             btn.classList.toggle('asc', sortDirection === 'asc');
+
             btn.classList.toggle('desc', sortDirection === 'desc');
+
             btn.textContent = sortDirection === 'asc' ? '↑' : '↓';
+
             btn.title = sortDirection === 'asc' ? 'Ascending (click to toggle)' : 'Descending (click to toggle)';
+
             saveFilterState();
+
             applyFilters();
+
         }
+
+
 
         // Update stats display
+
         function updateStats(total, showing) {
+
             document.getElementById('totalMapsCount').textContent = total.toLocaleString();
+
             document.getElementById('filteredMapsCount').textContent = showing.toLocaleString();
+
         }
+
+
 
         function updateSeasonCounts() {
+
             const counts = { Winter: 0, Spring: 0, Summer: 0, Autumn: 0 };
+
             for (const map of allMaps) {
+
                 const name = map.Name;
+
                 if (name.match(/Winter\s+\d{4}/i)) counts.Winter++;
+
                 else if (name.match(/Spring\s+\d{4}/i)) counts.Spring++;
+
                 else if (name.match(/Summer\s+\d{4}/i)) counts.Summer++;
+
                 else if (name.match(/Fall\s+\d{4}/i)) counts.Autumn++;
+
             }
+
             document.getElementById('countWinter').textContent = counts.Winter.toLocaleString();
+
             document.getElementById('countSpring').textContent = counts.Spring.toLocaleString();
+
             document.getElementById('countSummer').textContent = counts.Summer.toLocaleString();
+
             document.getElementById('countAutumn').textContent = counts.Autumn.toLocaleString();
+
         }
+
+
 
         function loadTrackHistory() {
+
             try {
+
                 const saved = localStorage.getItem(TRACK_HISTORY_KEY);
+
                 trackHistory = saved ? JSON.parse(saved) : [];
+
                 if (!Array.isArray(trackHistory)) {
+
                     trackHistory = [];
+
                 }
+
             } catch (error) {
+
                 trackHistory = [];
+
             }
+
         }
+
+
 
         function saveTrackHistory() {
+
             localStorage.setItem(TRACK_HISTORY_KEY, JSON.stringify(trackHistory));
+
         }
+
+
 
         function setTmxSettingsStatus(message, type) {
+
             const status = document.getElementById('tmxSettingsStatus');
+
             if (!status) return;
+
             status.textContent = message || '';
+
             status.className = 'settings-status';
+
             if (type) {
+
                 status.classList.add(type);
+
             }
+
         }
+
+
 
         async function loadTmxUserSettings() {
+
             try {
+
                 const saved = await window.electronAPI.getTmxUser();
+
                 if (saved) {
+
                     tmxUserName = (saved.name || '').toString();
+
                     tmxUserId = saved.userId || null;
+
                     const input = document.getElementById('tmxUserInput');
+
                     if (input) {
+
                         input.value = tmxUserName || (tmxUserId ? String(tmxUserId) : '');
+
                     }
+
                 }
+
+                // Update medal filter visibility after loading TMX user
+
+                updateMedalFilterVisibility();
+
+                // Update settings badge based on TMX user status
+
+                updateSettingsBadge();
+
             } catch (error) {
+
                 window.electronAPI.log(`Failed to load TMX user settings: ${error.message}`);
+
             }
+
         }
+
+
 
         async function loadLocalPersonalBests() {
+
             try {
+
                 const result = await window.electronAPI.getLocalPbs();
+
                 if (result && result.success) {
+
                     localPersonalBests = result.pbs || {};
+
                     window.electronAPI.log(`Loaded ${Object.keys(localPersonalBests).length} local PBs`);
+
                 } else {
+
                     localPersonalBests = {};
+
                     if (result && result.error) {
+
                         window.electronAPI.log(`Failed to load local PBs: ${result.error}`);
+
                     }
+
                 }
+
             } catch (error) {
+
                 localPersonalBests = {};
+
                 window.electronAPI.log(`Failed to load local PBs: ${error.message}`);
+
             }
+
         }
+
+
 
         async function lookupTmxUserId(rawValue, options = {}) {
+
             const value = (rawValue || '').trim();
+
             const cacheResult = options.cache === true;
 
+
+
             if (!value) {
+
                 return { userId: null, name: '', exact: false };
+
             }
+
+
 
             if (/^\d+$/.test(value)) {
+
                 const numericId = parseInt(value, 10);
+
                 if (!Number.isNaN(numericId)) {
+
                     if (cacheResult) {
+
                         tmxUserId = numericId;
+
                     }
+
                     return { userId: numericId, name: value, exact: true };
+
                 }
+
             }
+
+
 
             try {
+
                 const url = `https://trackmania.exchange/api/users?name=${encodeURIComponent(value)}&fields=UserId%2CName&count=20`;
+
                 const response = await fetch(url);
+
                 if (!response.ok) {
+
                     window.electronAPI.log(`TMX user lookup failed: HTTP ${response.status}`);
+
                     return { userId: null, name: value, exact: false };
+
                 }
+
                 const data = await response.json();
+
                 const results = Array.isArray(data?.Results) ? data.Results : [];
+
                 if (!results.length) {
+
                     return { userId: null, name: value, exact: false };
+
                 }
+
                 const exactMatch = results.find(user => (user.Name || '').toLowerCase() === value.toLowerCase());
+
                 const resolved = exactMatch || results[0];
+
                 if (resolved?.UserId) {
+
                     if (cacheResult) {
+
                         tmxUserId = resolved.UserId;
+
                     }
+
                     return {
+
                         userId: resolved.UserId,
+
                         name: resolved.Name || value,
+
                         exact: Boolean(exactMatch)
+
                     };
+
                 }
+
             } catch (error) {
+
                 window.electronAPI.log(`TMX user lookup error: ${error.message}`);
+
             }
+
+
 
             return { userId: null, name: value, exact: false };
+
         }
+
+
 
         async function resolveTmxUserId() {
+
             const rawValue = (tmxUserName || '').trim();
+
             if (!rawValue) {
+
                 tmxUserId = null;
+
                 return null;
+
             }
+
+
 
             if (tmxUserId && !/^\d+$/.test(rawValue)) {
+
                 return tmxUserId;
+
             }
+
+
 
             const resolved = await lookupTmxUserId(rawValue, { cache: true });
+
             if (resolved.userId) {
+
                 await window.electronAPI.saveTmxUser({ name: rawValue, userId: resolved.userId });
+
                 return resolved.userId;
+
             }
+
+
 
             return null;
+
         }
 
-        async function testTmxUserLookup() {
+
+
+        async function saveTmxUserSettings() {
+
             const input = document.getElementById('tmxUserInput');
+
             if (!input) return;
 
+
+
             const value = input.value.trim();
+
+            setTmxSettingsStatus('', '');
+
+
+
             if (!value) {
-                setTmxSettingsStatus('Enter a TMX username or numeric User ID to test.', 'error');
+
+                tmxUserName = '';
+
+                tmxUserId = null;
+
+                const result = await window.electronAPI.saveTmxUser({ name: '', userId: null });
+
+                if (result && result.success === false) {
+
+                    setTmxSettingsStatus(result.error || 'Failed to clear TMX user.', 'error');
+
+                    return;
+
+                }
+
+                setTmxSettingsStatus('TMX user cleared. PBs will be hidden.', 'success');
+
+                updateMedalFilterVisibility(); // Hide medal filter
+
+                updateSettingsBadge(); // Show badge again
+
+                fetchMaps();
+
                 return;
+
             }
+
+
+
+            // Test the username first
 
             setTmxSettingsStatus('Testing TMX user lookup...', '');
 
             const resolved = await lookupTmxUserId(value, { cache: false });
+
+            
+
             if (!resolved.userId) {
-                setTmxSettingsStatus('No TMX user found for that value.', 'error');
+
+                setTmxSettingsStatus('No TMX user found for that value. Please check the username or User ID.', 'error');
+
                 return;
+
             }
 
-            if (/^\d+$/.test(value)) {
-                setTmxSettingsStatus(`TMX user ID ${resolved.userId} is valid.`, 'success');
-                return;
-            }
 
-            const matchNote = resolved.exact ? 'Exact match' : 'Closest match';
-            setTmxSettingsStatus(`${matchNote}: ${resolved.name} (User ID ${resolved.userId}).`, 'success');
-        }
 
-        async function saveTmxUserSettings() {
-            const input = document.getElementById('tmxUserInput');
-            if (!input) return;
-
-            const value = input.value.trim();
-            setTmxSettingsStatus('', '');
-
-            if (!value) {
-                tmxUserName = '';
-                tmxUserId = null;
-                const result = await window.electronAPI.saveTmxUser({ name: '', userId: null });
-                if (result && result.success === false) {
-                    setTmxSettingsStatus(result.error || 'Failed to clear TMX user.', 'error');
-                    return;
-                }
-                setTmxSettingsStatus('TMX user cleared. PBs will be hidden.', 'success');
-                fetchMaps();
-                return;
-            }
+            // If we get here, the test passed, so save the user
 
             tmxUserName = value;
-            tmxUserId = /^\d+$/.test(value) ? parseInt(value, 10) : null;
+
+            tmxUserId = /^\d+$/.test(value) ? parseInt(value, 10) : resolved.userId;
+
             const result = await window.electronAPI.saveTmxUser({ name: tmxUserName, userId: tmxUserId });
+
             if (result && result.success === false) {
+
                 setTmxSettingsStatus(result.error || 'Failed to save TMX user.', 'error');
+
                 return;
+
             }
-            setTmxSettingsStatus('TMX user saved. Refreshing PBs...', 'success');
+
+
+
+            // Show success message with user info
+
+            if (/^\d+$/.test(value)) {
+
+                setTmxSettingsStatus(`TMX user ID ${resolved.userId} validated and saved.`, 'success');
+
+            } else {
+
+                const matchNote = resolved.exact ? 'Exact match' : 'Closest match';
+
+                setTmxSettingsStatus(`${matchNote}: ${resolved.name} (User ID ${resolved.userId}) - Saved successfully!`, 'success');
+
+            }
+
+            
+
+            updateMedalFilterVisibility(); // Show medal filter
+
+            updateSettingsBadge(); // Hide badge
+
             fetchMaps();
+
         }
+
+
 
         function addTrackToHistory(mapId, mapName) {
+
             trackHistory = trackHistory.filter(item => item.mapId !== mapId);
+
             trackHistory.unshift({
+
                 mapId,
+
                 mapName,
+
                 playedAt: new Date().toISOString()
+
             });
+
             trackHistory = trackHistory.slice(0, MAX_TRACK_HISTORY);
+
             saveTrackHistory();
+
             renderTrackHistory();
+
         }
+
+
 
         function formatHistoryDate(value) {
+
             const date = new Date(value);
+
             if (Number.isNaN(date.getTime())) {
+
                 return 'Unknown time';
+
             }
+
             const now = new Date();
+
             const diffMs = now - date;
+
             const diffSecs = Math.floor(diffMs / 1000);
+
             const diffMins = Math.floor(diffSecs / 60);
+
             const diffHours = Math.floor(diffMins / 60);
+
             const diffDays = Math.floor(diffHours / 24);
 
+
+
             let ago = '';
+
             if (diffSecs < 60) {
+
                 ago = 'Just now';
+
             } else if (diffMins < 60) {
+
                 ago = `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+
             } else if (diffHours < 24) {
+
                 ago = `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+
             } else if (diffDays < 7) {
+
                 ago = `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+
             } else {
+
                 ago = date.toLocaleDateString();
+
             }
+
             return `${date.toLocaleString()} (${ago})`;
+
         }
+
+
 
         function renderTrackHistory() {
+
             const container = document.getElementById('historyList');
+
             if (!trackHistory.length) {
+
                 container.innerHTML = '<div class="history-empty">No tracks launched yet.</div>';
+
                 return;
+
             }
+
+
 
             container.innerHTML = `<div class="history-list">${trackHistory.map(item => `
+
                 <div class="history-item" onclick="reopenHistoryTrack('${item.mapId}')">
+
                     <div class="history-item-thumb">
+
                         <img src="https://trackmania.exchange/mapthumb/${item.mapId}" alt="${escapeHtml(item.mapName || `Track ${item.mapId}`)}" loading="lazy" onerror="this.parentElement.textContent='No Image'">
+
                     </div>
+
                     <div class="history-item-content">
+
                         <div class="history-item-name">${escapeHtml(item.mapName || `Track ${item.mapId}`)}</div>
+
                         <div class="history-item-meta">
+
                             <span>ID: ${item.mapId}</span>
+
                             <span>${formatHistoryDate(item.playedAt)}</span>
+
                         </div>
+
                     </div>
+
                 </div>
+
             `).join('')}</div>`;
+
         }
+
+
 
         function openHistoryDrawer() {
+
             document.getElementById('historyDrawer').classList.add('open');
+
             document.getElementById('historyDrawerOverlay').classList.add('open');
+
             document.getElementById('historyDrawer').setAttribute('aria-hidden', 'false');
+
         }
+
+
 
         function closeHistoryDrawer() {
+
             document.getElementById('historyDrawer').classList.remove('open');
+
             document.getElementById('historyDrawerOverlay').classList.remove('open');
+
             document.getElementById('historyDrawer').setAttribute('aria-hidden', 'true');
+
         }
+
+
 
         function clearTrackHistory() {
+
             try {
+
                 trackHistory = [];
+
                 saveTrackHistory();
+
                 renderTrackHistory();
+
                 return { success: true };
+
             } catch (error) {
+
                 return { success: false, error: error.message };
+
             }
+
         }
+
+
 
         function setHistorySettingsStatus(message, type) {
+
             const status = document.getElementById('historySettingsStatus');
+
             status.textContent = message || '';
+
             status.className = 'settings-status';
+
             if (type) {
+
                 status.classList.add(type);
+
             }
+
         }
+
+
 
         function handleClearTrackHistory() {
+
             const result = clearTrackHistory();
+
             if (result.success) {
+
                 setHistorySettingsStatus('History cleared successfully.', 'success');
+
             } else {
+
                 setHistorySettingsStatus(`Failed to clear history: ${result.error || 'Unknown error'}`, 'error');
+
             }
+
         }
+
+
 
         async function reopenHistoryTrack(mapId) {
+
             const item = trackHistory.find(entry => entry.mapId === mapId);
+
             if (!item) {
+
                 return;
+
             }
+
             await handleMapClick({ ctrlKey: false }, item.mapId, item.mapName || `Track ${item.mapId}`);
+
         }
 
+
+
         function handleDownloadProgress(data) {
+
             if (!activeLaunch || data.mapId !== activeLaunch.mapId) {
+
                 return;
+
             }
 
+
+
             const progressOverlay = document.getElementById('progressOverlay');
+
             const progressTitle = document.getElementById('progressTitle');
+
             const progressBar = document.getElementById('progressBar');
+
             const progressText = document.getElementById('progressText');
+
+
 
             progressBar.style.width = `${data.progress}%`;
 
+
+
             switch (data.status) {
+
                 case 'starting':
+
                     progressText.textContent = 'Connecting to server...';
+
                     break;
+
                 case 'downloading':
+
                     progressText.textContent = `Downloading... ${data.progress}%`;
+
                     break;
+
                 case 'retry':
+
                     progressText.textContent = `${data.error} (Attempt ${data.retryAttempt}/${data.maxRetries})`;
+
                     break;
+
                 case 'cached':
+
                     progressTitle.textContent = `Launching ${activeLaunch.mapName}...`;
+
                     progressText.textContent = 'Using cached map...';
+
                     break;
+
                 case 'waiting':
+
                     progressText.textContent = 'Waiting for Trackmania...';
+
                     break;
+
                 case 'login':
+
                 case 'login-required':
+
                 case 'login-detecting':
+
                     progressText.textContent = 'Checking Trackmania login status...';
+
                     break;
+
                 case 'launching':
+
                     progressText.textContent = 'Launching map...';
+
                     break;
+
                 case 'complete': {
+
                     progressText.textContent = 'Complete!';
+
                     addTrackToHistory(activeLaunch.mapId, activeLaunch.mapName);
+
                     cachedMapsIds.add(activeLaunch.mapId);
+
                     const mapCard = document.querySelector(`.map-card[onclick*="'${activeLaunch.mapId}'"]`);
+
                     if (mapCard && !mapCard.querySelector('.cached-indicator')) {
+
                         const cachedIndicator = document.createElement('div');
+
                         cachedIndicator.className = 'cached-indicator';
+
                         cachedIndicator.innerHTML = `
+
                             <svg class="cached-icon" viewBox="0 0 24 24">
+
                                 <path d="M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.11 0 2-.9 2-2V5c0-1.1-.89-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+
                             </svg>
+
                             Cached
+
                         `;
+
                         mapCard.appendChild(cachedIndicator);
+
                     }
+
                     setTimeout(() => {
+
                         progressOverlay.style.display = 'none';
+
                         activeLaunch = null;
+
                     }, 1000);
+
                     break;
+
                 }
+
                 case 'error':
+
                     progressText.textContent = `Error: ${data.error}`;
+
                     setTimeout(() => {
+
                         progressOverlay.style.display = 'none';
+
                         activeLaunch = null;
+
                     }, 3000);
+
                     break;
+
             }
+
         }
 
+
+
 async function fetchMaps() {
+
             const content = document.getElementById('content');
+
             content.innerHTML = '<div class="loading">Loading maps</div>';
 
+
+
             try {
+
                 await loadLocalPersonalBests();
+
                 const resolvedUserId = tmxUserName ? await resolveTmxUserId() : null;
+
                 if (tmxUserName && !resolvedUserId) {
+
                     setTmxSettingsStatus('TMX user not found. PBs unavailable.', 'error');
+
                 }
+
+
 
                 const urlWithPb = buildApiUrl({ includePersonalBest: canRequestPersonalBest, replaysBy: resolvedUserId });
+
                 window.electronAPI.log(`Fetching maps from: ${urlWithPb}`);
+
                 let response = await fetch(urlWithPb);
+
                 window.electronAPI.log(`Maps API response status: ${response.status}`);
 
+
+
                 if (!response.ok && response.status === 400 && canRequestPersonalBest) {
+
                     canRequestPersonalBest = false;
+
                     const fallbackUrl = buildApiUrl({ includePersonalBest: false, replaysBy: resolvedUserId });
+
                     window.electronAPI.log(`PB fields rejected, retrying without PB fields: ${fallbackUrl}`);
+
                     response = await fetch(fallbackUrl);
+
                     window.electronAPI.log(`Maps API response status (fallback): ${response.status}`);
+
                 }
+
+
 
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
+
+
                 const data = await response.json();
+
                 allMaps = data.Results || [];
+
                 window.electronAPI.log(`Received ${allMaps.length} maps from API`);
+
                 
+
                 // Pre-check cached status for all maps
+
                 content.innerHTML = '<div class="loading">Checking cached maps...</div>';
+
                 cachedMapsIds.clear();
+
                 
+
                 // Check cached status in batches for performance
+
                 const batchSize = 10;
+
                 for (let i = 0; i < allMaps.length; i += batchSize) {
+
                     const batch = allMaps.slice(i, i + batchSize);
+
                     await Promise.all(batch.map(async (map) => {
+
                         if (await window.electronAPI.isMapCached(map.MapId)) {
+
                             cachedMapsIds.add(map.MapId);
+
                         }
+
                     }));
+
                 }
+
                 
+
                 updateSeasonCounts();
+
                 applyFilters();
+
             } catch (error) {
+
                 content.innerHTML = `<div class="error">Failed to load maps: ${error.message}</div>`;
+
             }
+
         }
+
+
 
         // Apply all filters and sorting
+
         function applyFilters() {
+
             let filtered = [...allMaps];
+
             
+
             // Apply search filter
+
             const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+
             if (searchTerm) {
+
                 filtered = filtered.filter(map => 
+
                     map.Name.toLowerCase().includes(searchTerm)
+
                 );
+
             }
+
             
+
             // Apply cached include/exclude filter
+
             if (!includeCached) {
+
                 filtered = filtered.filter(map => !cachedMapsIds.has(map.MapId));
+
             }
+
             
+
             // Apply color filters
+
             filtered = filtered.filter(map => {
+
                 const match = map.Name.match(/(\d{4})\s*-\s*(\d{1,2})$/);
+
                 if (!match) {
+
                     return colorFilters.unclassified;
+
                 }
+
                 const num = parseInt(match[2], 10);
+
                 if (num >= 1 && num <= 5) return colorFilters.white;
+
                 if (num >= 6 && num <= 10) return colorFilters.green;
+
                 if (num >= 11 && num <= 15) return colorFilters.yellow;
+
                 if (num >= 16 && num <= 20) return colorFilters.red;
+
                 if (num >= 21 && num <= 25) return colorFilters.black;
+
                 return colorFilters.unclassified;
+
             });
+
             
+
             // Apply season filters
+
             const hasSeasonFilter = Object.values(seasonFilters).some(v => !v);
+
             if (hasSeasonFilter) {
+
                 filtered = filtered.filter(map => {
+
                     const name = map.Name;
+
                     if (name.match(/Winter\s+\d{4}/i)) return seasonFilters.Winter;
+
                     if (name.match(/Spring\s+\d{4}/i)) return seasonFilters.Spring;
+
                     if (name.match(/Summer\s+\d{4}/i)) return seasonFilters.Summer;
+
                     if (name.match(/Fall\s+\d{4}/i)) return seasonFilters.Autumn;
+
                     return true;
+
                 });
+
             }
+
             
-            // Apply sorting
-            const sortBy = document.getElementById('sortSelect').value;
-            const multiplier = sortDirection === 'asc' ? 1 : -1;
-            filtered.sort((a, b) => {
-                const extractNumber = (name) => {
-                    const match = name.match(/(\d+)/);
-                    return match ? parseInt(match[1], 10) : 0;
-                };
-                
-                switch (sortBy) {
-                    case 'mapId': return ((a.MapId || 0) - (b.MapId || 0)) * multiplier;
-                    case 'natural': {
-                        const numA = extractNumber(a.Name);
-                        const numB = extractNumber(b.Name);
-                        return (numA - numB) * multiplier;
+
+            // Apply medal filter (only if TMX user is set)
+
+            if ((tmxUserName || tmxUserId) && medalFilter > 0) {
+
+                filtered = filtered.filter(map => {
+
+                    const pbTime = getPersonalBestTime(map);
+
+                    
+
+                    const bronzeTime = normalizeRecordTime(map.Medals?.Bronze);
+
+                    const silverTime = normalizeRecordTime(map.Medals?.Silver);
+
+                    const goldTime = normalizeRecordTime(map.Medals?.Gold);
+
+                    const authorTime = normalizeRecordTime(map.Medals?.Author);
+
+                    
+
+                    switch (medalFilter) {
+
+                        case 1: // Haven't beaten Bronze
+
+                            return bronzeTime && (!pbTime || pbTime > bronzeTime);
+
+                        case 2: // Haven't beaten Silver
+
+                            return silverTime && (!pbTime || pbTime > silverTime);
+
+                        case 3: // Haven't beaten Gold
+
+                            return goldTime && (!pbTime || pbTime > goldTime);
+
+                        case 4: // Haven't beaten Author
+
+                            return authorTime && (!pbTime || pbTime > authorTime);
+
+                        default:
+
+                            return true;
+
                     }
+
+                });
+
+            }
+
+            
+
+            // Apply sorting
+
+            const sortBy = document.getElementById('sortSelect').value;
+
+            const multiplier = sortDirection === 'asc' ? 1 : -1;
+
+            filtered.sort((a, b) => {
+
+                const extractNumber = (name) => {
+
+                    const match = name.match(/(\d+)/);
+
+                    return match ? parseInt(match[1], 10) : 0;
+
+                };
+
+                
+
+                switch (sortBy) {
+
+                    case 'mapId': return ((a.MapId || 0) - (b.MapId || 0)) * multiplier;
+
+                    case 'natural': {
+
+                        const numA = extractNumber(a.Name);
+
+                        const numB = extractNumber(b.Name);
+
+                        return (numA - numB) * multiplier;
+
+                    }
+
                     case 'name': return a.Name.localeCompare(b.Name) * multiplier;
+
                     case 'downloads': return ((b.DownloadCount || 0) - (a.DownloadCount || 0)) * multiplier;
+
                     case 'awards': return ((b.AwardCount || 0) - (a.AwardCount || 0)) * multiplier;
+
                     case 'difficulty': return ((a.Difficulty || 0) - (b.Difficulty || 0)) * multiplier;
+
                     default: return 0;
+
                 }
+
             });
+
             
+
             updateStats(allMaps.length, filtered.length);
+
             
+
             // Display maps
+
             displayMaps(filtered);
+
         }
+
+
 
         function getDifficultyClass(diff) {
+
             const d = parseInt(diff) || 0;
+
             if (d <= 2) return 'diff-beginner';
+
             if (d <= 4) return 'diff-intermediate';
+
             if (d <= 6) return 'diff-advanced';
+
             if (d <= 8) return 'diff-expert';
+
             return 'diff-lunatic';
+
         }
+
+
 
         function getDifficultyName(diff) {
+
             const d = parseInt(diff) || 0;
+
             if (d <= 2) return 'Beginner';
+
             if (d <= 4) return 'Intermediate';
+
             if (d <= 6) return 'Advanced';
+
             if (d <= 8) return 'Expert';
+
             return 'Lunatic';
+
         }
+
+
 
         function getSeasonBorderClass(name) {
+
             const match = name.match(/(\d{4})\s*-\s*(\d{1,2})$/);
+
             if (!match) return '';
+
             const num = parseInt(match[2], 10);
+
             if (num >= 1 && num <= 5) return 'border-white';
+
             if (num >= 6 && num <= 10) return 'border-green';
+
             if (num >= 11 && num <= 15) return 'border-yellow';
+
             if (num >= 16 && num <= 20) return 'border-red';
+
             if (num >= 21 && num <= 25) return 'border-black';
+
             return '';
+
         }
+
+
 
         function displayMaps(maps) {
+
             const content = document.getElementById('content');
 
+
+
             if (!maps || maps.length === 0) {
+
                 content.innerHTML = '<div class="error">No maps found. Try adjusting your filters!</div>';
+
                 return;
+
             }
+
+
 
             const html = `<div class="maps-grid">${maps.map(map => {
+
                 const pbTime = getPersonalBestTime(map);
+
                 return `
+
                 <div class="map-card ${getSeasonBorderClass(map.Name)}" onclick="handleMapClick(event, '${map.MapId}', '${map.Name.replace(/'/g, "\\'")}')">
+
                     ${cachedMapsIds.has(map.MapId) ? `
+
                     <div class="cached-indicator">
+
                         <svg class="cached-icon" viewBox="0 0 24 24">
+
                             <path d="M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.11 0 2-.9 2-2V5c0-1.1-.89-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+
                         </svg>
+
                         Cached
+
                     </div>` : ''}
+
                     <div class="map-image">
+
                         <img src="https://trackmania.exchange/mapthumb/${map.MapId}" alt="${map.Name}" loading="lazy" onerror="this.parentElement.innerHTML='No Image'">
+
                     </div>
+
                     <div class="map-info">
+
                         <div class="map-name">${escapeHtml(map.Name)}</div>
+
                         <div class="map-details">
+
                             <span class="difficulty ${getDifficultyClass(map.Difficulty)}">${getDifficultyName(map.Difficulty)}</span>
+
                         </div>
+
                         <div class="stats">
+
                             <div class="stat">
+
                                 <span class="stat-value">${(map.DownloadCount || 0).toLocaleString()}</span>
+
                                 Downloads
+
                             </div>
+
                             <div class="stat">
+
                                 <span class="stat-value">${map.AwardCount || 0}</span>
+
                                 Awards
+
                             </div>
+
                             <div class="stat">
+
                                 <span class="stat-value">${map.ReplayCount || 0}</span>
+
                                 Replays
+
                             </div>
+
                         </div>
+
                         <div class="medals-row">
+
                             <div class="medal medal-bronze${getMedalClaimClass(pbTime, map.Medals?.Bronze)}">
+
                                 <span class="medal-icon">🥉</span>
+
                                 <span class="medal-time">${formatTime(map.Medals?.Bronze)}</span>
+
                             </div>
+
                             <div class="medal medal-silver${getMedalClaimClass(pbTime, map.Medals?.Silver)}">
+
                                 <span class="medal-icon">🥈</span>
+
                                 <span class="medal-time">${formatTime(map.Medals?.Silver)}</span>
+
                             </div>
+
                             <div class="medal medal-gold${getMedalClaimClass(pbTime, map.Medals?.Gold)}">
+
                                 <span class="medal-icon">🥇</span>
+
                                 <span class="medal-time">${formatTime(map.Medals?.Gold)}</span>
+
                             </div>
+
                             <div class="medal medal-author${getMedalClaimClass(pbTime, map.Medals?.Author)}">
+
                                 <span class="medal-icon">⭐</span>
+
                                 <span class="medal-time">${formatTime(map.Medals?.Author)}</span>
+
                             </div>
+
                         </div>
+
                         ${renderPersonalBest(map)}
+
                     </div>
+
                     <div class="click-hint">🌐 Ctrl+Click to open in browser</div>
+
                 </div>
+
             `;
+
             }).join('')}</div>`;
 
+
+
             content.innerHTML = html;
+
         }
+
+
 
         function escapeHtml(text) {
+
             const div = document.createElement('div');
+
             div.textContent = text;
+
             return div.innerHTML;
+
         }
+
+
 
         function formatTime(ms) {
+
             if (!ms || ms <= 0) return '--:--';
+
             const totalSeconds = Math.floor(ms / 1000);
+
             const minutes = Math.floor(totalSeconds / 60);
+
             const seconds = totalSeconds % 60;
+
             const milliseconds = ms % 1000;
+
             return `${minutes}:${seconds.toString().padStart(2, '0')}.${Math.floor(milliseconds / 100)}`;
+
         }
+
+
 
         function normalizeRecordTime(record) {
+
             if (!record) return null;
+
             if (typeof record === 'number' && record > 0) return record;
+
             if (typeof record === 'string') {
+
                 const parsed = Number(record);
+
                 if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+
             }
+
             if (typeof record === 'object') {
+
                 const candidates = ['RecordTime', 'ReplayTime', 'Time', 'time', 'recordTime', 'Score'];
+
                 for (const key of candidates) {
+
                     const value = record[key];
+
                     if (typeof value === 'number' && value > 0) {
+
                         return value;
+
                     }
+
                     if (typeof value === 'string') {
+
                         const parsed = Number(value);
+
                         if (!Number.isNaN(parsed) && parsed > 0) {
+
                             return parsed;
+
                         }
+
                     }
+
                 }
+
             }
+
             return null;
+
         }
+
+
 
         function getPersonalBestTime(map) {
+
             const localPb = map?.MapUid ? localPersonalBests[map.MapUid] : null;
+
             return normalizeRecordTime(map?.UserOnlineRecord?.RecordTime)
+
                 || normalizeRecordTime(map?.UserRecord?.ReplayTime)
+
                 || normalizeRecordTime(map?.UserOnlineRecord)
+
                 || normalizeRecordTime(map?.UserRecord)
+
                 || normalizeRecordTime(localPb);
+
         }
+
+
 
         function getMedalClaimClass(pbTime, medalTime) {
+
             const pb = normalizeRecordTime(pbTime);
+
             const medal = normalizeRecordTime(medalTime);
+
             if (!medal) {
+
                 return ' medal-unclaimed';
+
             }
+
             if (pb && pb <= medal) {
+
                 return ' medal-claimed';
+
             }
+
             return ' medal-unclaimed';
+
         }
+
+
 
         function renderPersonalBest(map) {
+
             const pbTime = getPersonalBestTime(map);
+
             if (!tmxUserName && !tmxUserId && !pbTime) return '';
+
             const displayTime = pbTime ? formatTime(pbTime) : '--:--';
+
             const emptyClass = pbTime ? '' : ' empty';
+
             return `
+
                 <div class="personal-best${emptyClass}">
+
                     <span class="personal-best-label">PB</span>
+
                     <span class="personal-best-time">${displayTime}</span>
+
                 </div>
+
             `;
+
         }
+
+
 
         async function handleMapClick(event, mapId, mapName) {
+
             if (event.ctrlKey) {
+
                 window.open(`https://trackmania.exchange/tracks/${mapId}`, '_blank');
+
                 return;
+
             }
+
             
+
             if (activeLaunch && activeLaunch.mapId === mapId) {
+
                 return;
+
             }
+
             
+
             const progressOverlay = document.getElementById('progressOverlay');
+
             const progressTitle = document.getElementById('progressTitle');
+
             const progressBar = document.getElementById('progressBar');
+
             const progressText = document.getElementById('progressText');
+
             
+
             activeLaunch = { mapId, mapName };
+
             progressTitle.textContent = `Downloading ${mapName}...`;
+
             progressBar.style.width = '0%';
+
             progressText.textContent = 'Starting...';
+
             progressOverlay.style.display = 'flex';
+
             
+
             await window.electronAPI.openTrackmania(mapId);
+
         }
+
+
 
         // Initialize
+
         async function init() {
+
             await loadFilterState();
+
             await loadTmxUserSettings();
+
             loadTrackHistory();
+
             renderTrackHistory();
+
             setDefaultYearRange();
+
             applyFilterStateToUI();
+
             
+
+            // Add Enter key support for TMX username input
+
+            const tmxInput = document.getElementById('tmxUserInput');
+
+            if (tmxInput) {
+
+                tmxInput.addEventListener('keypress', (e) => {
+
+                    if (e.key === 'Enter') {
+
+                        e.preventDefault();
+
+                        saveTmxUserSettings();
+
+                    }
+
+                });
+
+            }
+
+            
+
             // Check for clean marker and clear history if present
+
             const shouldCleanHistory = await window.electronAPI.checkCleanMarker();
+
             if (shouldCleanHistory) {
+
                 localStorage.removeItem(TRACK_HISTORY_KEY);
+
                 renderTrackHistory();
+
             }
+
             
+
             // Load current Trackmania path
+
             const currentPath = await window.electronAPI.getTrackmaniaPath();
+
             if (currentPath) {
+
                 document.getElementById('trackmaniaPathInput').value = currentPath;
+
             }
+
             
+
             fetchMaps();
+
         }
+
+
 
         // Settings modal functions
+
         function openSettings() {
+
             document.getElementById('settingsOverlay').style.display = 'flex';
+
             setHistorySettingsStatus('', '');
+
             setTmxSettingsStatus('', '');
+
         }
+
+
 
         function closeSettings() {
+
             document.getElementById('settingsOverlay').style.display = 'none';
+
             setHistorySettingsStatus('', '');
+
         }
+
+
 
         async function selectTrackmaniaPath() {
+
             const result = await window.electronAPI.selectTrackmaniaPath();
+
             if (result.success) {
+
                 document.getElementById('trackmaniaPathInput').value = result.path;
+
             } else if (!result.canceled) {
+
                 alert(result.error || 'Failed to select Trackmania path');
+
             }
+
         }
 
+
+
         // Close modal when clicking outside
+
         document.getElementById('settingsOverlay').addEventListener('click', (e) => {
+
             if (e.target === document.getElementById('settingsOverlay')) {
+
                 closeSettings();
+
             }
+
         });
 
+
+
         document.addEventListener('keydown', async (event) => {
+
             if (event.key === 'Escape') {
+
                 closeHistoryDrawer();
+
                 const progressOverlay = document.getElementById('progressOverlay');
+
                 if (activeLaunch && progressOverlay.style.display !== 'none') {
+
                     progressOverlay.style.display = 'none';
+
                     const cancelledMapId = activeLaunch.mapId;
+
                     activeLaunch = null;
+
                     await window.electronAPI.cancelDownload(cancelledMapId);
+
                 }
+
             }
+
         });
+
+
 
         window.electronAPI.onDownloadProgress(handleDownloadProgress);
 
+
+
         init();
+
     </script>
+
 </body>
+
 </html>
+
