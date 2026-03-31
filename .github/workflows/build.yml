@@ -41,8 +41,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/TrackHunter 1.0.2.exe
-            dist/TrackHunter Setup 1.0.2.exe
+            dist/TrackHunter 1.0.5.exe
+            dist/TrackHunter Setup 1.0.5.exe
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
