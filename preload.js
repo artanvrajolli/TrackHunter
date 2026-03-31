@@ -28,5 +28,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     tmioLogin: () => ipcRenderer.invoke('tmio-login'),
     onDownloadProgress: (callback) => {
         ipcRenderer.on('download-progress', (event, data) => callback(data));
+    },
+    onReplayNewPb: (callback) => {
+        ipcRenderer.on('replay-new-pb', (event, data) => callback(data));
     }
 });

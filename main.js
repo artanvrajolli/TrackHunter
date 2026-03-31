@@ -191,6 +191,8 @@ function saveConfig() {
 }
 
 let mainWindow;
+let replayWatcher = null;
+let replayDebounceTimer = null;
 const logFile = path.join(os.tmpdir(), 'trackmania-viewer.log');
 let localPbCache = null;
 let localPbCacheAt = 0;
@@ -924,6 +926,62 @@ restoreNadeoSession().catch((err) => {
     log(`Startup Nadeo session restore failed: ${err.message}`);
 });
 
+async function parseReplayForMapUid(filePath) {
+    try {
+        const { GBX } = await import('gbx');
+        const data = await fs.promises.readFile(filePath);
+        const gbx = new GBX(data);
+        const replay = await gbx.parseHeaders();
+        const uid = replay?.mapInfo?.id;
+        const time = replay?.time;
+        if (uid && typeof time === 'number' && time > 0) {
+            return { mapUid: uid, time };
+        }
+    } catch (error) {
+    }
+    return null;
+}
+
+function setupReplayWatcher() {
+    const docsDir = app.getPath('documents');
+    const replaysDir = path.join(docsDir, 'Trackmania', 'Replays', 'Autosaves');
+
+    if (!fs.existsSync(replaysDir)) {
+        log(`Replay directory does not exist, skipping watcher: ${replaysDir}`);
+        return;
+    }
+
+    if (replayWatcher) {
+        replayWatcher.close();
+    }
+
+    log(`Watching replay directory: ${replaysDir}`);
+
+    replayWatcher = fs.watch(replaysDir, { persistent: false }, (eventType, filename) => {
+        if (!filename || eventType !== 'rename') return;
+
+        const name = filename.toLowerCase();
+        if (!name.endsWith('.replay.gbx') || !name.includes('personalbest')) return;
+
+        if (replayDebounceTimer) clearTimeout(replayDebounceTimer);
+
+        replayDebounceTimer = setTimeout(async () => {
+            const filePath = path.join(replaysDir, filename);
+            if (!fs.existsSync(filePath)) return;
+
+            const result = await parseReplayForMapUid(filePath);
+            if (result && mainWindow && !mainWindow.isDestroyed()) {
+                log(`New PB replay detected: ${result.mapUid} (${result.time}ms)`);
+                mainWindow.webContents.send('replay-new-pb', result);
+            }
+        }, 1500);
+    });
+
+    replayWatcher.on('error', (error) => {
+        log(`Replay watcher error: ${error.message}`);
+    });
+}
+
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1200,
@@ -939,11 +997,21 @@ function createWindow() {
     mainWindow.loadFile('index.html');
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+    createWindow();
+    setupReplayWatcher();
+});
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         app.quit();
+    }
+});
+
+app.on('before-quit', () => {
+    if (replayWatcher) {
+        replayWatcher.close();
+        replayWatcher = null;
     }
 });
 

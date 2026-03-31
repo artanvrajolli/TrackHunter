@@ -5083,7 +5083,31 @@ async function fetchMaps() {
 
         window.electronAPI.onDownloadProgress(handleDownloadProgress);
 
+        window.electronAPI.onReplayNewPb(async ({ mapUid }) => {
+            if (!tmioAuthenticated) return;
+            if (!mapUid) return;
 
+            const card = document.querySelector(`.map-card[data-map-uid="${mapUid}"]`);
+            if (!card) return;
+
+            const rect = card.getBoundingClientRect();
+            const visible = rect.bottom > 0 && rect.top < window.innerHeight;
+            if (!visible) return;
+
+            try {
+                const result = await window.electronAPI.tmioGetPbSingle({ mapUid });
+                if (result.success && result.pb) {
+                    tmioPbs[mapUid] = result.pb;
+                } else {
+                    tmioNoRecordUids.add(mapUid);
+                }
+                tmioLoadingUids.delete(mapUid);
+                tmioFetchQueue.delete(mapUid);
+                updateMapCardPb(mapUid);
+            } catch (error) {
+                log(`Failed to refresh PB for ${mapUid}: ${error.message}`);
+            }
+        });
 
         init();
 

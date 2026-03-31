@@ -1,6 +1,6 @@
 {
   "name": "trackhunter",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "TrackHunter",
   "author": "artanvrajolli",
   "main": "main.js",
@@ -20,7 +20,8 @@
       "main.js",
       "preload.js",
       "index.html",
-      "background.jpg"
+      "background.jpg",
+      "img/**"
     ],
     "win": {
       "target": [
