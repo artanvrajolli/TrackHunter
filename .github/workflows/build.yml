@@ -34,6 +34,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Get version
+        id: version
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
       - name: List dist folder
         run: Get-ChildItem -Path dist -Recurse -File | Select-Object FullName, Length
 
@@ -41,8 +47,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/TrackHunter 1.0.5.exe
-            dist/TrackHunter Setup 1.0.5.exe
+            dist/TrackHunter ${{ steps.version.outputs.version }}.exe
+            dist/TrackHunter Setup ${{ steps.version.outputs.version }}.exe
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
