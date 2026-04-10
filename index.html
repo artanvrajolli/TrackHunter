@@ -2384,6 +2384,62 @@
 
         }
 
+        .history-item-next-target {
+
+            display: inline-flex;
+
+            align-items: center;
+
+            gap: 5px;
+
+            padding: 2px 8px;
+
+            border-radius: 999px;
+
+            font-size: 0.72em;
+
+            font-weight: 600;
+
+            border: 1px solid rgba(255, 255, 255, 0.15);
+
+            background: rgba(255, 255, 255, 0.08);
+
+            color: #eef5fb;
+
+        }
+
+        .history-item-next-target .medal-img {
+
+            width: 18px;
+
+            height: 18px;
+
+        }
+
+        .history-item-next-target.history-next-silver {
+
+            border-color: rgba(192, 192, 192, 0.35);
+
+            background: rgba(192, 192, 192, 0.14);
+
+        }
+
+        .history-item-next-target.history-next-gold {
+
+            border-color: rgba(255, 215, 0, 0.35);
+
+            background: rgba(255, 215, 0, 0.14);
+
+        }
+
+        .history-item-next-target.history-next-author {
+
+            border-color: rgba(0, 255, 136, 0.35);
+
+            background: rgba(0, 255, 136, 0.14);
+
+        }
+
         .history-item-beaten {
 
             font-size: 0.85em;
@@ -3687,6 +3743,36 @@
 
         }
 
+        function getNextHistoryMedalTarget(pbTime, medals) {
+
+            const pb = normalizeRecordTime(pbTime);
+
+            if (!pb || !medals) return null;
+
+            const targets = [
+
+                { key: 'silver', label: 'Silver', time: normalizeRecordTime(medals.Silver), icon: MEDAL_SVG.silver },
+
+                { key: 'gold', label: 'Gold', time: normalizeRecordTime(medals.Gold), icon: MEDAL_SVG.gold },
+
+                { key: 'author', label: 'Author', time: normalizeRecordTime(medals.Author), icon: MEDAL_SVG.author }
+
+            ];
+
+            return targets.find(target => target.time && pb > target.time) || null;
+
+        }
+
+        function buildHistoryNextTargetHtml(pbTime, medals) {
+
+            const nextTarget = getNextHistoryMedalTarget(pbTime, medals);
+
+            if (!nextTarget) return '';
+
+            return `<span class="history-item-next-target history-next-${nextTarget.key}" title="Next medal to beat: ${nextTarget.label}">Next ${nextTarget.icon}<span>${formatTime(nextTarget.time)}</span></span>`;
+
+        }
+
 
 
         function buildHistoryItemHtml(item) {
@@ -3726,14 +3812,15 @@
                 }
 
                 const pbDisplay = effectivePb ? formatTime(effectivePb) : null;
+                const nextTargetHtml = buildHistoryNextTargetHtml(effectivePb, item.medals);
 
                 if (medalsRowHtml) {
 
-                    medalsHtml = `<div class="history-item-pb-row">${pbDisplay ? `<span class="history-item-pb">PB ${pbDisplay}</span>` : ''}<span class="history-item-beaten">${medalsRowHtml}</span></div>`;
+                    medalsHtml = `<div class="history-item-pb-row">${pbDisplay ? `<span class="history-item-pb">PB ${pbDisplay}</span>` : ''}${nextTargetHtml}<span class="history-item-beaten">${medalsRowHtml}</span></div>`;
 
-                } else if (pbDisplay) {
+                } else if (pbDisplay || nextTargetHtml) {
 
-                    medalsHtml = `<div class="history-item-pb-row"><span class="history-item-pb">PB ${pbDisplay}</span></div>`;
+                    medalsHtml = `<div class="history-item-pb-row">${pbDisplay ? `<span class="history-item-pb">PB ${pbDisplay}</span>` : ''}${nextTargetHtml}</div>`;
 
                 }
 
