@@ -16,6 +16,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
     checkCleanMarker: () => ipcRenderer.invoke('check-clean-marker'),
     cancelDownload: (mapId) => ipcRenderer.invoke('cancel-download', mapId),
     log: (message) => ipcRenderer.invoke('log', message),
+    getControllerStatus: () => ipcRenderer.invoke('get-controller-status'),
+    setControllerOverlayEnabled: (enabled) => ipcRenderer.invoke('set-controller-overlay-enabled', enabled),
+    openControllerOverlay: () => ipcRenderer.invoke('open-controller-overlay'),
+    closeControllerOverlay: () => ipcRenderer.invoke('close-controller-overlay'),
+    onControllerAction: (callback) => {
+        const listener = (event, action) => callback(action);
+        ipcRenderer.on('controller-action', listener);
+        return () => ipcRenderer.removeListener('controller-action', listener);
+    },
+    onControllerStatus: (callback) => {
+        const listener = (event, status) => callback(status);
+        ipcRenderer.on('controller-status', listener);
+        return () => ipcRenderer.removeListener('controller-status', listener);
+    },
+    onControllerOverlayShown: (callback) => {
+        const listener = () => callback();
+        ipcRenderer.on('controller-overlay-shown', listener);
+        return () => ipcRenderer.removeListener('controller-overlay-shown', listener);
+    },
+    onControllerOverlayHidden: (callback) => {
+        const listener = () => callback();
+        ipcRenderer.on('controller-overlay-hidden', listener);
+        return () => ipcRenderer.removeListener('controller-overlay-hidden', listener);
+    },
     nadeoLoginUbisoft: (payload) => ipcRenderer.invoke('nadeo-login-ubisoft', payload),
     nadeoLoginOAuth: (payload) => ipcRenderer.invoke('nadeo-login-oauth', payload),
     nadeoLogout: () => ipcRenderer.invoke('nadeo-logout'),

@@ -3,7 +3,7 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.join(__dirname, '..');
-const files = ['main.js', 'preload.js', ...['scripts', 'tests'].flatMap(directory =>
+const files = ['main.js', 'preload.js', 'controller.js', ...['scripts', 'tests'].flatMap(directory =>
     fs.readdirSync(path.join(root, directory)).filter(file => file.endsWith('.js')).map(file => `${directory}/${file}`)
 )];
 for (const file of files) {

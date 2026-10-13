@@ -23,4 +23,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - name: Compile Windows controller bridge
+        if: runner.os == 'Windows'
+        run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/controller-input.ps1 -ValidateOnly
       - run: npm test

@@ -8,7 +8,7 @@ const { setTimeout: delay } = require('timers/promises');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const source = html.match(/<script>([\s\S]*?)<\/script>/)[1].split('        init().catch')[0];
 
-function createHarness(t) {
+function createHarness(t, overlay = false) {
     const elements = new Map();
     const timers = new Set();
     const makeElement = () => ({
@@ -25,17 +25,22 @@ function createHarness(t) {
         get textContent() { return this.text || ''; },
     });
     const document = {
+        body: makeElement(),
         getElementById(id) { if (!elements.has(id)) elements.set(id, makeElement()); return elements.get(id); },
         createElement: makeElement, querySelector: () => null, querySelectorAll: () => [], addEventListener() {},
     };
     const api = {
-        log: async () => {}, onDownloadProgress() {}, onReplayNewPb(callback) { api.replayCallback = callback; },
+        log: async () => {}, onControllerStatus() {},
+        onControllerAction(callback) { api.actionCallback = callback; },
+        onControllerOverlayShown(callback) { api.shownCallback = callback; },
+        onControllerOverlayHidden(callback) { api.hiddenCallback = callback; },
+        closeControllerOverlay: async () => ({ success: true }), onDownloadProgress() {}, onReplayNewPb(callback) { api.replayCallback = callback; },
         getCachedMapIds: async () => ({ success: true, mapIds: [] }),
         loadFilterState: async () => null, saveFilterState: async () => ({ success: true }),
     };
     const context = vm.createContext({
-        document, window: { electronAPI: api, addEventListener() {} },
-        localStorage: { getItem: () => null, setItem() {} }, URL, AbortController, console,
+        document, window: { electronAPI: api, location: { search: overlay ? '?overlay=1' : '' }, addEventListener() {} },
+        localStorage: { getItem: () => null, setItem() {} }, URL, URLSearchParams, AbortController, console,
         IntersectionObserver: class { observe() {} unobserve() {} disconnect() {} },
         setTimeout: (fn, ms) => { const timer = setTimeout(fn, ms); timers.add(timer); return timer; }, clearTimeout,
         fetch: async () => ({ ok: true, json: async () => ({ Results: [] }) }),
@@ -159,4 +164,62 @@ test('local PB replay updates history immediately and cannot replace a faster be
     await h.api.replayCallback({ mapUid: 'uid1', time: 38000 });
     assert.equal(h.evaluate('trackHistory[0].pbTime'), 35000);
     assert.equal(h.evaluate("getPersonalBestTime({ MapUid: 'uid1' })"), 35000);
+});
+
+test('overlay navigation follows grid columns, clamps at edges, and pages through maps', t => {
+    const h = createHarness(t, true);
+    const cards = Array.from({ length: 10 }, (_, i) => ({
+        dataset: { mapId: String(i + 1) }, classList: { toggle() {} }, setAttribute() {}, focus() {}, scrollIntoView() {},
+        getBoundingClientRect: () => ({ top: Math.floor(i / 4) * 300, height: 280 }),
+    }));
+    h.document.querySelectorAll = selector => selector === '.map-card' ? cards : [];
+    h.document.getElementById('content').clientHeight = 600;
+    h.evaluate("overlayVisible = true; overlayMapIds = Array.from({length: 10}, (_, i) => String(i + 1)); overlaySelectedId = '1';");
+    h.api.actionCallback('left');
+    assert.equal(h.evaluate('overlaySelectedId'), '1');
+    h.api.actionCallback('down');
+    assert.equal(h.evaluate('overlaySelectedId'), '5');
+    h.api.actionCallback('right');
+    assert.equal(h.evaluate('overlaySelectedId'), '6');
+    h.api.actionCallback('page-down');
+    assert.equal(h.evaluate('overlaySelectedId'), '10');
+    h.api.actionCallback('page-up');
+    assert.equal(h.evaluate('overlaySelectedId'), '2');
+});
+
+test('hidden overlay ignores input, B closes the picker, and A launches the selected map', async t => {
+    const h = createHarness(t, true);
+    let closed = 0;
+    const launched = [];
+    h.api.closeControllerOverlay = async () => { closed++; return { success: true }; };
+    h.api.openTrackmania = async id => { launched.push(id); return { success: true }; };
+    h.evaluate("allMaps = [{MapId: 2, Name: 'Winter 02'}]; overlayMapIds = ['2']; overlaySelectedId = '2';");
+    h.api.actionCallback('play');
+    assert.equal(launched.length, 0);
+    h.evaluate('overlayVisible = true;');
+    h.api.actionCallback('back');
+    await delay(0);
+    assert.equal(closed, 1);
+    h.api.actionCallback('play');
+    await delay(0);
+    assert.deepEqual(launched, ['2']);
+});
+
+test('X clears hidden desktop filters so the controller picker can recover empty results', t => {
+    const h = createHarness(t, true);
+    h.evaluate("overlayVisible = true; colorFilters.white = false; seasonFilters.Winter = false; includeCached = false;");
+    h.document.getElementById('searchInput').value = 'nonexistent';
+    h.api.actionCallback('clear-filters');
+    assert.equal(h.document.getElementById('searchInput').value, '');
+    assert.equal(h.evaluate('colorFilters.white && seasonFilters.Winter && includeCached'), true);
+});
+
+test('reopening the picker applies a search that was cleared in the desktop window', async t => {
+    const h = createHarness(t, true);
+    h.evaluate('rendererInitialized = true;');
+    h.document.getElementById('searchInput').value = 'old search';
+    h.api.loadFilterState = async () => ({ yearRange: '', searchTerm: '' });
+    h.api.tmioGetAuthToken = async () => null;
+    await h.api.shownCallback();
+    assert.equal(h.document.getElementById('searchInput').value, '');
 });

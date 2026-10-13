@@ -23,7 +23,8 @@
       "preload.js",
       "index.html",
       "background.jpg",
-      "img/**"
+      "img/**",
+      "controller.js"
     ],
     "win": {
       "target": [
@@ -31,7 +32,13 @@
         "portable"
       ]
     },
-    "publish": null
+    "publish": null,
+    "extraResources": [
+      {
+        "from": "scripts/controller-input.ps1",
+        "to": "controller-input.ps1"
+      }
+    ]
   },
   "dependencies": {
     "electron-store": "^7.0.3",

@@ -23,7 +23,9 @@ CI runs on `v*` tag push via `.github/workflows/build.yml` (Node 20, Windows). I
 
 | File | Purpose |
 |---|---|
-| `main.js` | Electron main process: window, IPC handlers, file I/O, game integration |
+| `main.js` | Electron main process: desktop and controller overlay windows, IPC, file I/O, game integration |
+| `controller.js` | Pure XInput hold, edge, deadzone, and repeat state machine |
+| `scripts/controller-input.ps1` | Windows XInput / foreground-window bridge; copied outside app.asar via extraResources |
 | `preload.js` | Context bridge — exposes IPC methods via `contextBridge.exposeInMainWorld()` |
 | `index.html` | Renderer: all UI HTML, inline CSS (`<style>`), inline JS (`<script>`) |
 | `scripts/track-clean.js` | Utility to purge temp map/history files |
@@ -33,7 +35,7 @@ CI runs on `v*` tag push via `.github/workflows/build.yml` (Node 20, Windows). I
 
 ## IPC Pattern (3-step)
 
-1. **main.js**: add handler with `handleIpc('channel-name', async (event, arg) => { ... })` (wraps `ipcMain.handle` with sender validation and error handling)
+1. **main.js**: add handler with `handleIpc('channel-name', async (event, arg) => { ... })` (wraps `ipcMain.handle` with sender validation for the desktop and overlay windows, and error handling)
 2. **preload.js**: expose via `methodName: (arg) => ipcRenderer.invoke('channel-name', arg)`
 3. **index.html** `<script>`: call `window.electronAPI.methodName(arg)`
 
@@ -156,6 +158,17 @@ Flow: `setupReplayWatcher()` → `fs.watch` callback → `parseReplayForMapUid()
 - Use `getCachedMapIds()` for bulk cache discovery instead of one IPC call per map.
 - Map refreshes use an abort controller and request generation so late responses cannot replace current results. Invalidate `preprocessedMaps` when map data changes.
 - Do not interpolate map names into JavaScript event handler strings; use escaped `data-map-name` attributes.
+
+## Controller overlay
+
+- `controller.js` interprets native samples in the main process. Start must be held for 900ms while Trackmania or the focused overlay is active; navigation and activation require overlay focus.
+- `scripts/controller-input.ps1` polls all four XInput slots using Windows APIs. The helper runs without a visible console, emits newline-delimited JSON, accepts only focus commands for this app / Trackmania, and exits when stdin closes.
+- The helper is an `extraResources` file: Windows PowerShell cannot execute a script from inside `app.asar`. `controller.js` must also be included in the packaged app's `files` list.
+- `openControllerOverlay()` creates a frameless, always-on-top window using `index.html?overlay=1`; the renderer uses `IS_CONTROLLER_OVERLAY` to show controller controls and selection. Desktop behavior remains separate.
+- `handleIpc()` trusts only the main frame of the two local browser windows. Overlay-specific close requests must come from the overlay.
+- Own and cancel launches by sender: closing the overlay must not cancel a launch started by the desktop window. Hide on blur without aborting a map that is opening the game.
+- Skip blur handlers during shutdown so destroying the overlay cannot leave a hidden window keeping the app alive.
+- Windows CI runs the bridge with `-ValidateOnly` and a real stream/lifecycle test; non-Windows CI skips only the native bridge test. Actual controller / Trackmania focus and exclusive fullscreen require manual testing on Windows.
 
 ## Error Handling
 

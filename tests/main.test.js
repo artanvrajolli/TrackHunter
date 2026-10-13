@@ -35,13 +35,13 @@ async function createHarness(t, serve = (req, res) => res.end('GBXtest-map'), mo
         request: (options, callback) => http.request({ ...options, hostname: '127.0.0.1', port }, callback),
     };
     const context = vm.createContext({
-        require: name => Object.hasOwn(mocks, name) ? mocks[name] : name === 'electron' ? electron : name === 'https' ? network : name === 'os' ? { ...os, tmpdir: () => directory } : require(name),
+        require: name => Object.hasOwn(mocks, name) ? mocks[name] : name === './controller' ? require('../controller') : name === 'electron' ? electron : name === 'https' ? network : name === 'os' ? { ...os, tmpdir: () => directory } : require(name),
         __dirname: path.join(__dirname, '..'), process, console: { log() {}, error() {} },
         URL, Buffer, AbortController, setTimeout, clearTimeout, setInterval, clearInterval,
     });
     vm.runInContext(source, context);
     context.testWebContents = webContents;
-    vm.runInContext('mainWindow = { webContents: testWebContents };', context);
+    vm.runInContext('mainWindow = { webContents: testWebContents, isDestroyed: () => false };', context);
     return {
         directory, context, shell, events,
         invoke: (name, arg, sender = event) => handlers.get(name)(sender, arg),
@@ -235,4 +235,17 @@ test('login detection accepts Base64Url account keys containing hyphens and unde
     const h = await createHarness(t, undefined, { gbxremote: { Client } });
     const result = await h.evaluate('probeTrackmaniaSessionReady(100)');
     assert.equal(result.ready, true);
+});
+
+test('overlay IPC trusts only its local main frame and validates controller settings', async t => {
+    const h = await createHarness(t);
+    assert.equal((await h.invoke('set-controller-overlay-enabled', 'true')).success, false);
+    assert.equal((await h.invoke('set-controller-overlay-enabled', false)).success, true);
+    assert.equal((await h.invoke('get-controller-status')).enabled, false);
+    assert.equal((await h.invoke('close-controller-overlay')).success, false);
+    const overlayContents = { mainFrame: {}, send() {} };
+    h.context.testOverlayContents = overlayContents;
+    h.evaluate('controllerOverlayWindow = { webContents: testOverlayContents, isDestroyed: () => false };');
+    assert.equal((await h.invoke('get-controller-status', undefined, { sender: overlayContents, senderFrame: overlayContents.mainFrame })).success, true);
+    assert.equal((await h.invoke('get-controller-status', undefined, { sender: overlayContents, senderFrame: {} })).success, false);
 });

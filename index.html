@@ -2595,11 +2595,48 @@
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
         }
+
+        .controller-overlay-header, .controller-overlay-footer { display: none; }
+        body.controller-overlay { height: 100vh; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: #111827; }
+        .controller-overlay .filter-bar { display: none; }
+        .controller-overlay-header { align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px; border-bottom: 1px solid #334155; background: #0f172a; }
+        .controller-overlay .controller-overlay-header, .controller-overlay .controller-overlay-footer { display: flex; }
+        .controller-overlay-header h1 { font-size: 24px; color: var(--accent); }
+        .controller-overlay-header p { color: #aab9cc; font-size: 13px; margin-top: 4px; }
+        .controller-overlay-year { display: flex; align-items: center; gap: 14px; }
+        .controller-overlay-year .action-btn { margin: 0; }
+        #overlayYearLabel { min-width: 84px; text-align: center; font-size: 20px; }
+        .controller-overlay #content { flex: 1; min-height: 0; overflow-y: auto; }
+        .controller-overlay .maps-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; padding: 24px; }
+        .controller-overlay .map-card { background: #1e293b; }
+        .controller-overlay .map-card.controller-selected { outline: 3px solid var(--accent); outline-offset: 4px; box-shadow: 0 0 22px #00ff8840; }
+        .controller-overlay .map-card .click-hint { display: none; }
+        .controller-overlay .map-image { height: 128px; }
+        .controller-overlay .map-name { font-size: 17px; }
+        .controller-overlay-footer { flex-shrink: 0; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px 24px; border-top: 1px solid #334155; background: #0f172a; color: #cbd5e1; font-size: 14px; }
+        .controller-overlay-hints { display: flex; flex-wrap: wrap; gap: 16px; }
+        .controller-key { color: var(--accent); font-weight: 700; }
+        .controller-setting-label { display: flex; gap: 10px; align-items: center; }
+        @media (max-width: 950px) { .controller-overlay .maps-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        @media (max-width: 650px) {
+            .controller-overlay .maps-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .controller-overlay-header { flex-wrap: wrap; padding: 12px 18px; }
+            .controller-overlay-footer { padding: 10px 18px; }
+        }
     </style>
 
 </head>
 
 <body>
+    <header class="controller-overlay-header">
+        <div><h1>TrackHunter</h1><p>Choose your next map</p></div>
+        <div class="controller-overlay-year">
+            <button class="action-btn" onclick="changeOverlayYear(-1)" aria-label="Previous year">LB ‹</button>
+            <span id="overlayYearLabel">All years</span>
+            <button class="action-btn" onclick="changeOverlayYear(1)" aria-label="Next year">› RB</button>
+        </div>
+        <button class="action-btn" onclick="closeOverlayPicker()">Close · B</button>
+    </header>
 
 
 
@@ -2778,6 +2815,16 @@
 
 
 
+    <footer class="controller-overlay-footer">
+        <span id="overlaySelectionCount" role="status">Loading maps…</span>
+        <div class="controller-overlay-hints">
+            <span><span class="controller-key">D-pad / stick</span> Select</span>
+            <span><span class="controller-key">A</span> Play</span>
+            <span><span class="controller-key">B</span> Back</span>
+            <span><span class="controller-key">X</span> Clear filters</span>
+            <span><span class="controller-key">LT / RT</span> Page</span>
+        </div>
+    </footer>
     <div id="progressOverlay" class="progress-overlay is-hidden" role="dialog" aria-modal="true" aria-labelledby="progressTitle">
 
         <div class="progress-modal">
@@ -2904,6 +2951,17 @@
             </div>
 
             <div class="settings-group">
+                <label>Controller overlay</label>
+                <label class="controller-setting-label" for="controllerOverlayEnabled">
+                    <input type="checkbox" id="controllerOverlayEnabled" onchange="setControllerOverlayEnabled(this.checked)">
+                    Hold Start / Menu to open the map picker
+                </label>
+                <div class="settings-help-text">Xbox / XInput controllers on Windows. Hold for 0.9 seconds while Trackmania is focused. Use borderless or windowed mode. D-pad / left stick selects; A plays; B closes; LB / RB switches year; LT / RT scrolls a page.</div>
+                <div id="controllerSettingsStatus" class="settings-status" role="status"></div>
+                <button class="action-btn" onclick="openOverlayPicker()">Open map picker</button>
+            </div>
+
+            <div class="settings-group">
 
                 <label>History</label>
 
@@ -2963,6 +3021,7 @@
 
     <script>
 
+        const IS_CONTROLLER_OVERLAY = new URLSearchParams(window.location.search).get('overlay') === '1';
         const API_URL_BASE = 'https://trackmania.exchange/api/maps';
 
         const DEFAULT_FIELDS_BASE = 'MapId%2CMapUid%2CName%2CAuthors%5B%5D%2CEnvironment%2CType%2CTags%5B%5D%2CLength%2CDifficulty%2CRoutes%2CAwardCount%2CDownloadCount%2CReplayCount%2CTrackValue%2CIsPublic%2CIsListed%2CVehicle%2CVehicleName%2CHasImages%2CReplayType%2CHasCoauthorRequest%2CAuthorBeaten%2COnlineWR%2CMedals.Bronze%2CMedals.Silver%2CMedals.Gold%2CMedals.Author';
@@ -3005,6 +3064,11 @@
         let mapFetchController = null;
         let mapFetchVersion = 0;
         let mapsLoaded = false;
+        let overlayMapIds = [];
+        let overlaySelectedId = null;
+        let overlayVisible = false;
+        let rendererInitialized = false;
+        let overlayRefreshVersion = 0;
         let filterSaveTimer = null;
         let searchTimer = null;
         let launchCloseTimer = null;
@@ -4354,7 +4418,12 @@
 
                     }
 
-                    finishLaunchAfter(700);
+                    if (IS_CONTROLLER_OVERLAY) {
+                        clearTimeout(launchCloseTimer);
+                        hideDialog('progressOverlay');
+                        activeLaunch = null;
+                        closeOverlayPicker();
+                    } else finishLaunchAfter(700);
                     if (!includeCached) applyFilters();
 
                     break;
@@ -4746,6 +4815,10 @@
         }
 
         function displayMaps(maps) {
+            if (IS_CONTROLLER_OVERLAY) {
+                overlayMapIds = (maps || []).map(map => String(map.MapId));
+                if (!overlayMapIds.includes(overlaySelectedId)) overlaySelectedId = overlayMapIds[0] || null;
+            }
 
             const content = document.getElementById('content');
 
@@ -4756,6 +4829,7 @@
                 clearQueuedPbs();
 
                 content.innerHTML = '<div class="error">No maps found. Try adjusting your filters!</div>';
+                if (IS_CONTROLLER_OVERLAY) updateOverlaySelection();
 
                 return;
 
@@ -4871,6 +4945,7 @@
                 }
             }
             setupTmioObserver();
+            if (IS_CONTROLLER_OVERLAY) updateOverlaySelection();
 
         }
 
@@ -5111,6 +5186,7 @@
             await loadFilterState();
 
             await loadTmioStatus();
+            await loadControllerStatus();
 
             updateSettingsBadge();
 
@@ -5168,7 +5244,9 @@
 
             
 
+            rendererInitialized = true;
             fetchMaps();
+            if (IS_CONTROLLER_OVERLAY) updateOverlayYearLabel();
 
         }
 
@@ -5235,7 +5313,171 @@
 
 
 
+        function renderControllerStatus(status) {
+            const checkbox = document.getElementById('controllerOverlayEnabled');
+            checkbox.checked = status.enabled;
+            checkbox.disabled = !status.supported;
+            if (IS_CONTROLLER_OVERLAY && overlayVisible && status.connected) updateOverlaySelection();
+            const label = document.getElementById('controllerSettingsStatus');
+            label.textContent = !status.supported ? 'The Start button shortcut requires Windows. You can preview the picker with the button below.'
+                : !status.enabled ? 'Controller shortcut disabled.'
+                : status.error ? status.error
+                : !status.available ? 'Starting controller listener…'
+                : status.connected ? 'Controller connected. Hold Start / Menu in Trackmania to open.'
+                : 'Waiting for an Xbox / XInput controller.';
+        }
+
+        async function loadControllerStatus() {
+            try {
+                const status = await window.electronAPI.getControllerStatus();
+                if (!status.success) throw new Error(status.error);
+                renderControllerStatus(status);
+            } catch (error) {
+                rendererLog(`[Controller] ${error.message}`);
+                document.getElementById('controllerSettingsStatus').textContent = 'Could not read controller status. Please restart TrackHunter.';
+            }
+        }
+
+        async function setControllerOverlayEnabled(enabled) {
+            const checkbox = document.getElementById('controllerOverlayEnabled');
+            checkbox.disabled = true;
+            try {
+                const result = await window.electronAPI.setControllerOverlayEnabled(enabled);
+                if (!result.success) throw new Error(result.error);
+                renderControllerStatus(result);
+            } catch (error) {
+                rendererLog(`[Controller] ${error.message}`);
+                await loadControllerStatus();
+                showToast('Could not save the controller setting.', 'error');
+            }
+        }
+
+        async function openOverlayPicker() {
+            try {
+                const result = await window.electronAPI.openControllerOverlay();
+                if (!result.success) throw new Error(result.error);
+            } catch (error) {
+                rendererLog(`[Overlay] ${error.message}`);
+                showToast('Could not open the map picker. Please retry.', 'error');
+            }
+        }
+
+        async function closeOverlayPicker() {
+            try {
+                const result = await window.electronAPI.closeControllerOverlay();
+                if (!result.success) throw new Error(result.error);
+            } catch (error) {
+                rendererLog(`[Overlay] ${error.message}`);
+                showToast('Could not close the map picker. Please retry.', 'error');
+            }
+        }
+
+        function updateOverlayYearLabel() {
+            const year = document.getElementById('yearRange').value;
+            document.getElementById('overlayYearLabel').textContent = year || 'All years';
+        }
+
+        function updateOverlaySelection(scroll = false) {
+            const cards = [...document.querySelectorAll('.map-card')];
+            for (const card of cards) {
+                const selected = card.dataset.mapId === overlaySelectedId;
+                card.classList.toggle('controller-selected', selected);
+                card.setAttribute('aria-current', selected ? 'true' : 'false');
+                if (selected && scroll) {
+                    card.focus({ preventScroll: true });
+                    card.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+                }
+            }
+            const index = overlayMapIds.indexOf(overlaySelectedId);
+            document.getElementById('overlaySelectionCount').textContent = index >= 0 ? `Map ${index + 1} of ${overlayMapIds.length}` : 'No maps to select · LB / RB changes year · A retries a failed load';
+        }
+
+        function moveOverlaySelection(action) {
+            if (!overlayMapIds.length) return;
+            const cards = [...document.querySelectorAll('.map-card')];
+            const firstTop = cards[0]?.getBoundingClientRect().top;
+            const columns = Math.max(1, cards.filter(card => Math.abs(card.getBoundingClientRect().top - firstTop) < 2).length);
+            const current = Math.max(0, overlayMapIds.indexOf(overlaySelectedId));
+            let next = current;
+            if (action === 'left') next = current - 1;
+            else if (action === 'right') next = current + 1;
+            else if (action === 'up') next = current - columns;
+            else if (action === 'down') next = current + columns;
+            else {
+                const cardHeight = cards[0]?.getBoundingClientRect().height || 300;
+                const page = Math.max(1, Math.floor(document.getElementById('content').clientHeight / cardHeight)) * columns;
+                next = current + (action === 'page-up' ? -page : page);
+            }
+            overlaySelectedId = overlayMapIds[Math.max(0, Math.min(overlayMapIds.length - 1, next))];
+            updateOverlaySelection(true);
+        }
+
+        function changeOverlayYear(direction) {
+            if (activeLaunch) return;
+            const select = document.getElementById('yearRange');
+            const index = Math.max(0, Math.min(select.options.length - 1, select.selectedIndex + direction));
+            if (index === select.selectedIndex) return;
+            select.selectedIndex = index;
+            updateOverlayYearLabel();
+            saveFilterState();
+            fetchMaps();
+        }
+
+        function handleControllerAction(action) {
+            if (!IS_CONTROLLER_OVERLAY || !overlayVisible) return;
+            if (action === 'disconnected') {
+                document.getElementById('overlaySelectionCount').textContent = 'Controller disconnected · reconnect or press Escape to close';
+                return;
+            }
+            if (action === 'back') {
+                if (activeLaunch) cancelActiveLaunch();
+                else closeOverlayPicker();
+            } else if (activeLaunch) return;
+            else if (action === 'previous-year') changeOverlayYear(-1);
+            else if (action === 'next-year') changeOverlayYear(1);
+            else if (action === 'clear-filters') {
+                document.getElementById('searchInput').value = '';
+                for (const key of Object.keys(colorFilters)) colorFilters[key] = true;
+                for (const key of Object.keys(seasonFilters)) seasonFilters[key] = true;
+                includeCached = true;
+                syncFilterAccessibility();
+                saveFilterState();
+                applyFilters();
+            } else if (action === 'play') {
+                if (document.querySelector('#mapStatus button')) { fetchMaps(); return; }
+                const map = allMaps.find(item => String(item.MapId) === overlaySelectedId);
+                if (map) handleMapClick({ ctrlKey: false }, map.MapId, map.Name);
+            } else if (['up', 'down', 'left', 'right', 'page-up', 'page-down'].includes(action)) moveOverlaySelection(action);
+        }
+
+        async function refreshOverlayPicker() {
+            overlayVisible = true;
+            if (!rendererInitialized) return;
+            const version = ++overlayRefreshVersion;
+            try {
+                const saved = await window.electronAPI.loadFilterState();
+                if (version !== overlayRefreshVersion || !overlayVisible) return;
+                if (saved) {
+                    if (typeof saved.yearRange === 'string') window._savedYearRange = saved.yearRange;
+                    if (saved.sortBy) window._savedSortBy = saved.sortBy;
+                    if (typeof saved.searchTerm === 'string') { window._savedSearchTerm = saved.searchTerm; document.getElementById('searchInput').value = saved.searchTerm; }
+                    if (['asc', 'desc'].includes(saved.sortDirection)) sortDirection = saved.sortDirection;
+                    for (const key of Object.keys(colorFilters)) if (typeof saved.colorFilters?.[key] === 'boolean') colorFilters[key] = saved.colorFilters[key];
+                    for (const key of Object.keys(seasonFilters)) if (typeof saved.seasonFilters?.[key] === 'boolean') seasonFilters[key] = saved.seasonFilters[key];
+                    if (typeof saved.includeCached === 'boolean') includeCached = saved.includeCached;
+                }
+                applyFilterStateToUI();
+                updateOverlayYearLabel();
+                loadTrackHistory();
+                const previousToken = tmioAuthToken;
+                await loadTmioStatus();
+                if (previousToken !== tmioAuthToken) resetRendererPbs();
+                if (!activeLaunch) fetchMaps();
+            } catch (error) { rendererLog(`[Overlay] Refresh failed: ${error.message}`); }
+        }
+
         function handleControlKeydown(event) {
+            if (IS_CONTROLLER_OVERLAY && event.key === 'Enter') return;
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
                 event.currentTarget.click();
@@ -5305,10 +5547,14 @@
                 if (dialog?.id === 'progressOverlay') cancelActiveLaunch();
                 else if (dialog?.id === 'settingsOverlay') closeSettings();
                 else if (dialog?.id === 'historyDrawer') closeHistoryDrawer();
+                else if (IS_CONTROLLER_OVERLAY) closeOverlayPicker();
                 else if (document.activeElement.id === 'searchInput') {
                     document.getElementById('searchInput').value = '';
                     scheduleSearch();
                 }
+            } else if (IS_CONTROLLER_OVERLAY && !dialog && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(event.key)) {
+                event.preventDefault();
+                handleControllerAction({ ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: 'play' }[event.key]);
             } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && !dialog) {
                 event.preventDefault();
                 document.getElementById('searchInput').focus();
@@ -5326,9 +5572,20 @@
                 }
             }
         });
+        window.addEventListener('storage', event => {
+            if (event.key === TRACK_HISTORY_KEY) { loadTrackHistory(); renderTrackHistory(); }
+        });
         window.addEventListener('beforeunload', () => {
             if (filterSaveTimer) window.electronAPI.saveFilterState(collectFilterState()).catch(() => {});
         });
+
+        window.electronAPI.onControllerStatus(renderControllerStatus);
+        if (IS_CONTROLLER_OVERLAY) {
+            document.body.classList.add('controller-overlay');
+            window.electronAPI.onControllerAction(handleControllerAction);
+            window.electronAPI.onControllerOverlayShown(refreshOverlayPicker);
+            window.electronAPI.onControllerOverlayHidden(() => { overlayVisible = false; overlayRefreshVersion++; });
+        }
 
         window.electronAPI.onDownloadProgress(handleDownloadProgress);
 

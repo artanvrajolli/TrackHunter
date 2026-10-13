@@ -51,9 +51,27 @@ Filter choices, including All Years, and the window size are remembered. Failed 
 
 Connect trackmania.io in Settings to load online PBs. Requests are paced across the app, repeated lookups are cached for 60 seconds, and rate limits pause lookups before automatic retry. New local PB replays update visible cards and history immediately while the online record catches up.
 
+## Controller map picker
+
+On Windows, leave TrackHunter running and hold **Start / Menu for 0.9 seconds** while Trackmania is focused. A separate map picker opens above the game on the same monitor. Use **borderless or windowed mode**; a desktop window cannot reliably appear over exclusive fullscreen.
+
+| Controller input | Action |
+|---|---|
+| D-pad / left stick | Select a map; hold a direction to repeat |
+| A | Download and play the selected map; retry a failed map load |
+| B | Close the picker, or cancel an active download / launch preparation |
+| Hold Start / Menu | Toggle the picker |
+| LB / RB | Change the year selection |
+| LT / RT | Move one page through the map grid |
+| X | Clear search, campaign color, season, and cached-map filters |
+
+The picker uses your desktop filters and remembers the selected map. A successful launch closes it; a failed launch leaves it open for retry. Alt-tabbing away hides the picker. TrackHunter does not suppress the game's own controller input, so Start may also open Trackmania's pause menu.
+
+Xbox and other XInput-compatible controllers work through a bundled Windows PowerShell helper using Windows' built-in XInput API. No separate driver or native Node add-on is required for an Xbox controller. Enable or disable the shortcut in **Settings → Controller overlay**, where connection status and an **Open map picker** button are available. Controllers mapped through Steam Input need to be exposed as an XInput controller to TrackHunter. Non-Windows systems can preview the picker, but do not have the global Start shortcut.
+
 ## Verification
 
-`npm run check` validates JavaScript syntax without starting Electron. `npm test` uses Node's built-in test runner with isolated temporary folders and a local HTTP server; it does not launch Trackmania or use real credentials. The regression suite covers interrupted downloads, cancellation, redirects, failed launches, cache integrity, IPC validation, settings write failures, PB caching/rate limits, stale map responses, and debounced search.
+`npm run check` validates JavaScript syntax without starting Electron. `npm test` uses Node's built-in test runner with isolated temporary folders and a local HTTP server; it does not launch Trackmania or use real credentials. The regression suite covers interrupted downloads, cancellation, redirects, failed launches, cache integrity, IPC validation, settings write failures, PB caching/rate limits, stale map responses, debounced search, controller hold/repeat behavior, grid navigation, and controller-triggered map selection. Windows CI also compiles the PowerShell bridge, verifies its native struct layout and JSON protocol, and checks that it emits native samples and exits when its parent pipe closes.
 
 For changes to the desktop UI, also run `npm run start` and inspect the renderer console and `%TEMP%/trackmania-viewer.log`. Actual game launch, Ubisoft authentication, and replay detection require a Windows machine with Trackmania installed. CI runs syntax and regression checks on Windows and Linux; tagged releases also run those checks before packaging.
 

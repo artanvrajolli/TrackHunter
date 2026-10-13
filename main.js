@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, screen } = require('electron');
 const path = require('path');
 const { spawn, execFile } = require('child_process');
 const { promisify } = require('util');
@@ -11,11 +11,24 @@ const gbxremote = require('gbxremote');
 const { Transform } = require('stream');
 const { pipeline } = require('stream/promises');
 const { setTimeout: delay } = require('timers/promises');
+const { ControllerInput } = require('./controller');
 
 let config = {};
 let cancelDownloadId = null;
 let activeDownloadId = null;
 let launchAbortController = null;
+let launchOwner = null;
+let controllerOverlayWindow = null;
+let controllerOverlayOpening = false;
+let controllerOverlayReady = false;
+let controllerProcess = null;
+let controllerRestartTimer = null;
+let controllerRestartAttempts = 0;
+let quitting = false;
+let lastGameBounds = null;
+const controllerInput = new ControllerInput();
+const connectedControllerIndexes = new Set();
+let controllerStatus = { supported: process.platform === 'win32', available: false, connected: false, error: null };
 const configPath = path.join(app.getPath('userData'), 'config.json');
 
 async function getTrackmaniaProcessIds() {
@@ -978,7 +991,7 @@ function setupReplayWatcher() {
                     if (result && mainWindow && !mainWindow.isDestroyed()) {
                         localPbCache = null;
                         log(`[Replay] New PB: ${result.mapUid} (${result.time}ms)`);
-                        mainWindow.webContents.send('replay-new-pb', result);
+                        broadcastToBrowsers('replay-new-pb', result);
                     }
                 } catch (error) {
                     log(`[Replay] Could not read new PB: ${error.message}`);
@@ -1048,6 +1061,7 @@ function createWindow() {
         config.windowMaximized = mainWindow.isMaximized();
         try { saveConfig(); } catch (error) { log(`[Window] Could not save size: ${error.message}`); }
         launchAbortController?.abort();
+        controllerOverlayWindow?.destroy();
     });
     mainWindow.on('closed', () => { mainWindow = null; });
     if (config.windowMaximized === true) mainWindow.maximize();
@@ -1068,6 +1082,7 @@ if (!app.requestSingleInstanceLock()) {
     app.whenReady().then(() => {
         createWindow();
         setupReplayWatcher();
+        startControllerListener();
     }).catch(error => log(`[Startup] ${error.message}`));
 }
 
@@ -1076,6 +1091,9 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+    quitting = true;
+    stopControllerListener();
+    controllerOverlayWindow?.destroy();
     launchAbortController?.abort();
     replayWatcher?.close();
     replayWatcher = null;
@@ -1091,7 +1109,8 @@ app.on('activate', () => {
 function handleIpc(channel, handler) {
     ipcMain.handle(channel, async (event, ...args) => {
         try {
-            if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== event.sender.mainFrame) {
+            const window = [mainWindow, controllerOverlayWindow].find(candidate => candidate && !candidate.isDestroyed() && candidate.webContents === event.sender);
+            if (!window || event.senderFrame !== event.sender.mainFrame) {
                 return { success: false, error: 'Unauthorized request' };
             }
             return await handler(event, ...args);
@@ -1109,6 +1128,188 @@ function persistConfigPatch(patch) {
     catch (error) { config = previous; throw error; }
 }
 
+function broadcastToBrowsers(channel, data) {
+    for (const window of [mainWindow, controllerOverlayWindow]) {
+        if (window && !window.isDestroyed()) window.webContents.send(channel, data);
+    }
+}
+
+function getControllerStatus() {
+    return { ...controllerStatus, enabled: config.controllerOverlayEnabled !== false };
+}
+
+function updateControllerStatus(patch) {
+    controllerStatus = { ...controllerStatus, ...patch };
+    broadcastToBrowsers('controller-status', getControllerStatus());
+}
+
+function controllerCommand(command) {
+    if (controllerProcess && !controllerProcess.killed && controllerProcess.stdin.writable) {
+        controllerProcess.stdin.write(`${command}\n`);
+    }
+}
+
+function stopControllerListener() {
+    clearTimeout(controllerRestartTimer);
+    controllerRestartTimer = null;
+    const child = controllerProcess;
+    controllerProcess = null;
+    child?.kill();
+    connectedControllerIndexes.clear();
+    controllerInput.reset();
+    updateControllerStatus({ available: false, connected: false });
+}
+
+function startControllerListener() {
+    if (process.platform !== 'win32' || quitting || config.controllerOverlayEnabled === false || controllerProcess) return;
+    const scriptPath = app.isPackaged ? path.join(process.resourcesPath, 'controller-input.ps1') : path.join(__dirname, 'scripts', 'controller-input.ps1');
+    const powershellPath = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    const child = spawn(powershellPath, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath], {
+        windowsHide: true,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, TRACKHUNTER_OWNER_PID: String(process.pid) },
+    });
+    controllerProcess = child;
+    let buffer = '';
+    let failed = false;
+    const fail = error => {
+        if (failed || controllerProcess !== child) return;
+        failed = true;
+        log(`[Controller] Listener stopped: ${error.message}`);
+        stopControllerListener();
+        updateControllerStatus({ error: 'Controller listener unavailable. Check Windows PowerShell and restart TrackHunter.' });
+        if (!quitting && config.controllerOverlayEnabled !== false && controllerRestartAttempts < 3) {
+            controllerRestartAttempts++;
+            controllerRestartTimer = setTimeout(startControllerListener, 2000 * controllerRestartAttempts);
+        }
+    };
+    child.on('error', fail);
+    child.on('exit', () => fail(new Error('Windows controller bridge exited')));
+    child.stdin.on('error', fail);
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', chunk => {
+        if (controllerProcess !== child) return;
+        buffer += chunk;
+        if (buffer.length > 65536) { fail(new Error('Invalid controller bridge output')); return; }
+        let newline;
+        while ((newline = buffer.indexOf('\n')) !== -1) {
+            const line = buffer.slice(0, newline).trim();
+            buffer = buffer.slice(newline + 1);
+            try {
+                const sample = JSON.parse(line);
+                if (sample.type === 'ready') updateControllerStatus({ available: true, error: null });
+                else if (sample.type === 'state') handleControllerSample(sample);
+            } catch (error) {
+                fail(new Error('Invalid controller bridge message'));
+                return;
+            }
+        }
+    });
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', () => fail(new Error('Windows controller bridge reported an error')));
+}
+
+function handleControllerSample(sample) {
+    if (!Number.isInteger(sample.index) || sample.index < 0 || sample.index > 3 || typeof sample.connected !== 'boolean') return;
+    if (sample.connected) connectedControllerIndexes.add(sample.index);
+    else connectedControllerIndexes.delete(sample.index);
+    const connected = connectedControllerIndexes.size > 0;
+    if (connected !== controllerStatus.connected) updateControllerStatus({ connected });
+    if (sample.gameForeground && sample.bounds && ['x', 'y', 'width', 'height'].every(key => Number.isInteger(sample.bounds[key])) && sample.bounds.width > 0 && sample.bounds.height > 0) {
+        lastGameBounds = sample.bounds;
+    }
+    const overlayVisible = Boolean(controllerOverlayWindow && !controllerOverlayWindow.isDestroyed() && controllerOverlayWindow.isVisible());
+    const overlayFocused = overlayVisible && controllerOverlayWindow.isFocused();
+    const actions = controllerInput.update(sample, { overlayVisible, overlayFocused });
+    for (const action of actions) {
+        if (action === 'toggle') {
+            if (overlayVisible) closeControllerOverlay();
+            else openControllerOverlay().catch(error => log(`[Overlay] ${error.message}`));
+        } else if (overlayFocused && controllerOverlayReady) {
+            controllerOverlayWindow.webContents.send('controller-action', action);
+        }
+    }
+    if (!connected && overlayVisible) controllerOverlayWindow.webContents.send('controller-action', 'disconnected');
+}
+
+async function openControllerOverlay() {
+    if (quitting || controllerOverlayOpening) return;
+    controllerOverlayOpening = true;
+    try {
+        if (!controllerOverlayWindow || controllerOverlayWindow.isDestroyed()) {
+            const window = new BrowserWindow({
+                width: 1200, height: 760, show: false, frame: false,
+                resizable: false, skipTaskbar: true, alwaysOnTop: true,
+                title: 'TrackHunter Controller Overlay', backgroundColor: '#111827',
+                webPreferences: { nodeIntegration: false, contextIsolation: true, preload: path.join(__dirname, 'preload.js') },
+            });
+            controllerOverlayWindow = window;
+            controllerOverlayReady = false;
+            window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+            window.webContents.on('will-navigate', event => event.preventDefault());
+            const overlayContents = window.webContents;
+            window.on('closed', () => {
+                if (controllerOverlayWindow === window) { controllerOverlayWindow = null; controllerOverlayReady = false; }
+                if (launchOwner === overlayContents) launchAbortController?.abort();
+            });
+            window.on('blur', () => {
+                if (!quitting && !window.isDestroyed() && window.isVisible()) closeControllerOverlay(false);
+            });
+            await window.loadFile(path.join(__dirname, 'index.html'), { query: { overlay: '1' } });
+            if (quitting || window.isDestroyed()) return;
+            controllerOverlayReady = true;
+        }
+        const display = lastGameBounds ? screen.getDisplayNearestPoint({ x: Math.round(lastGameBounds.x + lastGameBounds.width / 2), y: Math.round(lastGameBounds.y + lastGameBounds.height / 2) }) : screen.getPrimaryDisplay();
+        const area = display.workArea;
+        const width = Math.min(1280, Math.max(320, area.width - 48));
+        const height = Math.min(820, Math.max(240, area.height - 48));
+        controllerOverlayWindow.setBounds({ x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2), width, height });
+        controllerOverlayWindow.setAlwaysOnTop(true, 'screen-saver');
+        controllerOverlayWindow.webContents.send('controller-overlay-shown');
+        controllerOverlayWindow.show();
+        controllerOverlayWindow.focus();
+        const handle = controllerOverlayWindow.getNativeWindowHandle();
+        const nativeHandle = handle.length >= 8 ? handle.readBigUInt64LE().toString() : String(handle.readUInt32LE());
+        controllerCommand(`focus-overlay ${nativeHandle}`);
+    } catch (error) {
+        controllerOverlayWindow?.destroy();
+        log(`[Overlay] Could not open picker: ${error.message}`);
+        throw error;
+    } finally {
+        controllerOverlayOpening = false;
+    }
+}
+
+function closeControllerOverlay(restoreGame = true) {
+    if (!controllerOverlayWindow || controllerOverlayWindow.isDestroyed()) return;
+    if (restoreGame && launchOwner === controllerOverlayWindow.webContents) launchAbortController?.abort();
+    // Restore the game before hiding: Windows only grants foreground control while
+    // this app owns focus, and the bridge verifies the game's process identity.
+    if (restoreGame && controllerOverlayWindow.isFocused()) controllerCommand('focus-game');
+    controllerOverlayWindow.hide();
+    controllerOverlayWindow.webContents.send('controller-overlay-hidden');
+}
+
+handleIpc('get-controller-status', async () => ({ success: true, ...getControllerStatus() }));
+handleIpc('set-controller-overlay-enabled', async (event, enabled) => {
+    if (typeof enabled !== 'boolean') throw new Error('Invalid controller setting');
+    persistConfigPatch({ controllerOverlayEnabled: enabled });
+    controllerRestartAttempts = 0;
+    if (enabled) startControllerListener();
+    else { stopControllerListener(); closeControllerOverlay(); }
+    updateControllerStatus({ error: null });
+    return { success: true, ...getControllerStatus() };
+});
+handleIpc('open-controller-overlay', async () => {
+    await openControllerOverlay();
+    return { success: true };
+});
+handleIpc('close-controller-overlay', async event => {
+    if (event.sender !== controllerOverlayWindow?.webContents) throw new Error('Overlay request required');
+    closeControllerOverlay();
+    return { success: true };
+});
+
 handleIpc('open-trackmania', async (event, mapId) => {
     try { mapId = normalizeMapId(mapId); } catch (error) { return { success: false, error: error.message }; }
     log(`[Open] Requested map ${mapId}`);
@@ -1119,6 +1320,7 @@ handleIpc('open-trackmania', async (event, mapId) => {
     }
     
     activeDownloadId = mapId;
+    launchOwner = event.sender;
     launchAbortController = new AbortController();
     let mapPath;
     try {
@@ -1251,6 +1453,7 @@ handleIpc('open-trackmania', async (event, mapId) => {
         cancelDownloadId = null;
         activeDownloadId = null;
         launchAbortController = null;
+        launchOwner = null;
     }
 });
 

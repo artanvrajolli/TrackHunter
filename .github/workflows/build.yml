@@ -28,6 +28,9 @@ jobs:
       - name: Check JavaScript syntax
         run: npm run check
 
+      - name: Compile Windows controller bridge
+        run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/controller-input.ps1 -ValidateOnly
+
       - name: Run regression tests
         run: npm test
 
