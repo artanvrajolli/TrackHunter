@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openTrackmania: (mapId) => ipcRenderer.invoke('open-trackmania', mapId),
     openMapDirect: (mapId) => ipcRenderer.invoke('open-map-direct', mapId),
     isMapCached: (mapId) => ipcRenderer.invoke('is-map-cached', mapId),
+    getCachedMapIds: () => ipcRenderer.invoke('get-cached-map-ids'),
     clearCachedMaps: () => ipcRenderer.invoke('clear-cached-maps'),
     saveFilterState: (state) => ipcRenderer.invoke('save-filter-state', state),
     loadFilterState: () => ipcRenderer.invoke('load-filter-state'),
@@ -27,9 +28,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     tmioGetPbSingle: (payload) => ipcRenderer.invoke('tmio-get-pb-single', payload),
     tmioLogin: () => ipcRenderer.invoke('tmio-login'),
     onDownloadProgress: (callback) => {
-        ipcRenderer.on('download-progress', (event, data) => callback(data));
+        const listener = (event, data) => callback(data);
+        ipcRenderer.on('download-progress', listener);
+        return () => ipcRenderer.removeListener('download-progress', listener);
     },
     onReplayNewPb: (callback) => {
-        ipcRenderer.on('replay-new-pb', (event, data) => callback(data));
+        const listener = (event, data) => callback(data);
+        ipcRenderer.on('replay-new-pb', listener);
+        return () => ipcRenderer.removeListener('replay-new-pb', listener);
     }
 });

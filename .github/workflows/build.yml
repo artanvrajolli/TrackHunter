@@ -25,6 +25,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check JavaScript syntax
+        run: npm run check
+
+      - name: Run regression tests
+        run: npm test
+
       - name: Add package files
         run: |
           Get-ChildItem -Recurse -File | Where-Object { $_.FullName -notlike "*node_modules*" -and $_.FullName -notlike "*\.git*" } | ForEach-Object { Write-Host $_.FullName }

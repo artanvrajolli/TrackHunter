@@ -2580,6 +2580,21 @@
 
         }
 
+
+        :root { --accent: #00ff88; }
+        .is-hidden { display: none !important; }
+        :focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+        .map-status { max-width: 1600px; margin: 0 auto; padding: 12px 20px; color: #ddd; }
+        .map-status:empty { display: none; }
+        .action-btn { margin: 12px 0 0; padding: 9px 16px; border: 1px solid var(--accent); border-radius: 6px; color: var(--accent); background: #1a1a2e; cursor: pointer; }
+        .action-btn:disabled { opacity: 0.6; cursor: wait; }
+        .map-status .action-btn { margin: 0 0 0 12px; }
+        .progress-bar { width: 0; }
+        .progress-modal { max-width: calc(100vw - 32px); }
+        .settings-modal { max-height: calc(100vh - 32px); overflow-y: auto; }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+        }
     </style>
 
 </head>
@@ -2596,7 +2611,7 @@
 
             <div class="settings-btn-container" id="settingsBtnContainer">
 
-                <button class="settings-btn" onclick="openSettings()" title="Settings">⚙️</button>
+                <button class="settings-btn" onclick="openSettings()" title="Settings" aria-label="Settings">⚙️</button>
 
                 <div class="settings-badge" id="settingsBadge">!</div>
 
@@ -2628,7 +2643,7 @@
 
                 <span class="filter-group-label">🔍 Search</span>
 
-                <input type="text" id="searchInput" placeholder="Map name..." oninput="saveFilterState(); applyFilters()">
+                <input type="text" id="searchInput" placeholder="Map name..." oninput="scheduleSearch()" aria-label="Search maps" maxlength="200">
 
             </div>
 
@@ -2664,7 +2679,7 @@
 
             <!-- Cached Include Toggle -->
 
-            <div class="toggle-container active" id="cachedToggle" onclick="toggleIncludeCached()" title="Include cached maps">
+            <div class="toggle-container active" id="cachedToggle" role="button" tabindex="0" aria-pressed="true" onkeydown="handleControlKeydown(event)" onclick="toggleIncludeCached()" title="Include cached maps" aria-label="Include cached maps">
 
                 <div class="toggle-switch"></div>
 
@@ -2682,17 +2697,17 @@
 
                 <div class="color-toggles">
 
-                    <div class="color-toggle active" id="colorWhite" onclick="toggleColorFilter('white')" style="background:#ffffff;" title="White (1-5)">✓</div>
+                    <div class="color-toggle active" id="colorWhite" role="button" tabindex="0" aria-pressed="true" onkeydown="handleControlKeydown(event)" onclick="toggleColorFilter('white')" style="background:#ffffff;" title="White (1-5)" aria-label="White (1-5)">✓</div>
 
-                    <div class="color-toggle active" id="colorGreen" onclick="toggleColorFilter('green')" style="background:#00ff88;" title="Green (6-10)">✓</div>
+                    <div class="color-toggle active" id="colorGreen" role="button" tabindex="0" aria-pressed="true" onkeydown="handleControlKeydown(event)" onclick="toggleColorFilter('green')" style="background:#00ff88;" title="Green (6-10)" aria-label="Green (6-10)">✓</div>
 
-                    <div class="color-toggle active" id="colorYellow" onclick="toggleColorFilter('yellow')" style="background:#ffdd00;" title="Yellow (11-15)">✓</div>
+                    <div class="color-toggle active" id="colorYellow" role="button" tabindex="0" aria-pressed="true" onkeydown="handleControlKeydown(event)" onclick="toggleColorFilter('yellow')" style="background:#ffdd00;" title="Yellow (11-15)" aria-label="Yellow (11-15)">✓</div>
 
-                    <div class="color-toggle active" id="colorRed" onclick="toggleColorFilter('red')" style="background:#ff4444;" title="Red (16-20)">✓</div>
+                    <div class="color-toggle active" id="colorRed" role="button" tabindex="0" aria-pressed="true" onkeydown="handleControlKeydown(event)" onclick="toggleColorFilter('red')" style="background:#ff4444;" title="Red (16-20)" aria-label="Red (16-20)">✓</div>
 
-                    <div class="color-toggle active" id="colorBlack" onclick="toggleColorFilter('black')" style="background: repeating-linear-gradient(-45deg, #000, #000 2px, #444 2px, #444 4px);" title="Black (21-25)">✓</div>
+                    <div class="color-toggle active" id="colorBlack" role="button" tabindex="0" aria-pressed="true" onkeydown="handleControlKeydown(event)" onclick="toggleColorFilter('black')" style="background: repeating-linear-gradient(-45deg, #000, #000 2px, #444 2px, #444 4px);" title="Black (21-25)" aria-label="Black (21-25)">✓</div>
 
-                    <div class="color-toggle active" id="colorUnclassified" onclick="toggleColorFilter('unclassified')" style="background:#666666;" title="Unclassified">?</div>
+                    <div class="color-toggle active" id="colorUnclassified" role="button" tabindex="0" aria-pressed="true" onkeydown="handleControlKeydown(event)" onclick="toggleColorFilter('unclassified')" style="background:#666666;" title="Unclassified" aria-label="Unclassified">?</div>
 
                 </div>
 
@@ -2708,13 +2723,13 @@
 
                 <div class="color-toggles">
 
-                    <div class="season-toggle active" id="seasonWinter" onclick="toggleSeasonFilter('Winter')" title="Winter"><span class="icon">❄️</span><span class="count" id="countWinter">0</span></div>
+                    <div class="season-toggle active" id="seasonWinter" role="button" tabindex="0" aria-pressed="true" onkeydown="handleControlKeydown(event)" onclick="toggleSeasonFilter('Winter')" title="Winter" aria-label="Winter"><span class="icon">❄️</span><span class="count" id="countWinter">0</span></div>
 
-                    <div class="season-toggle active" id="seasonSpring" onclick="toggleSeasonFilter('Spring')" title="Spring"><span class="icon">🌸</span><span class="count" id="countSpring">0</span></div>
+                    <div class="season-toggle active" id="seasonSpring" role="button" tabindex="0" aria-pressed="true" onkeydown="handleControlKeydown(event)" onclick="toggleSeasonFilter('Spring')" title="Spring" aria-label="Spring"><span class="icon">🌸</span><span class="count" id="countSpring">0</span></div>
 
-                    <div class="season-toggle active" id="seasonSummer" onclick="toggleSeasonFilter('Summer')" title="Summer"><span class="icon">☀️</span><span class="count" id="countSummer">0</span></div>
+                    <div class="season-toggle active" id="seasonSummer" role="button" tabindex="0" aria-pressed="true" onkeydown="handleControlKeydown(event)" onclick="toggleSeasonFilter('Summer')" title="Summer" aria-label="Summer"><span class="icon">☀️</span><span class="count" id="countSummer">0</span></div>
 
-                    <div class="season-toggle active" id="seasonAutumn" onclick="toggleSeasonFilter('Autumn')" title="Fall"><span class="icon">🍂</span><span class="count" id="countAutumn">0</span></div>
+                    <div class="season-toggle active" id="seasonAutumn" role="button" tabindex="0" aria-pressed="true" onkeydown="handleControlKeydown(event)" onclick="toggleSeasonFilter('Autumn')" title="Fall" aria-label="Fall"><span class="icon">🍂</span><span class="count" id="countAutumn">0</span></div>
 
                 </div>
 
@@ -2754,7 +2769,8 @@
 
 
 
-    <div id="content">
+    <div id="mapStatus" class="map-status" role="status" aria-live="polite"></div>
+    <div id="content" aria-busy="true">
 
         <div class="loading">Loading maps</div>
 
@@ -2762,7 +2778,7 @@
 
 
 
-    <div id="progressOverlay" class="progress-overlay" style="display: none;">
+    <div id="progressOverlay" class="progress-overlay is-hidden" role="dialog" aria-modal="true" aria-labelledby="progressTitle">
 
         <div class="progress-modal">
 
@@ -2770,11 +2786,12 @@
 
             <div class="progress-bar-container">
 
-                <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                <div class="progress-bar" id="progressBar" role="progressbar" aria-label="Map launch progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
 
             </div>
 
-            <div class="progress-text" id="progressText">Starting...</div>
+            <div class="progress-text" id="progressText" role="status">Starting...</div>
+            <button id="cancelLaunchBtn" class="action-btn" onclick="cancelActiveLaunch()">Cancel (Esc)</button>
 
         </div>
 
@@ -2786,13 +2803,13 @@
 
 
 
-    <aside id="historyDrawer" class="history-drawer" aria-hidden="true">
+    <aside id="historyDrawer" class="history-drawer" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="historyTitle" inert>
 
         <div class="history-drawer-header">
 
-            <h2>Latest Played Tracks</h2>
+            <h2 id="historyTitle">Latest Played Tracks</h2>
 
-            <button class="close-btn" onclick="closeHistoryDrawer()">&times;</button>
+            <button class="close-btn" onclick="closeHistoryDrawer()" aria-label="Close history">&times;</button>
 
         </div>
 
@@ -2808,15 +2825,15 @@
 
     <!-- Settings Modal -->
 
-    <div id="settingsOverlay" class="settings-modal-overlay" style="display: none;">
+    <div id="settingsOverlay" class="settings-modal-overlay is-hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
 
         <div class="settings-modal">
 
             <div class="settings-modal-header">
 
-                <h2>Settings</h2>
+                <h2 id="settingsTitle">Settings</h2>
 
-                <button class="close-btn" onclick="closeSettings()">&times;</button>
+                <button class="close-btn" onclick="closeSettings()" aria-label="Close settings">&times;</button>
 
             </div>
 
@@ -2940,7 +2957,7 @@
 
 
 
-    <div id="toastContainer" class="toast-container"></div>
+    <div id="toastContainer" role="log" aria-live="polite" class="toast-container"></div>
 
 
 
@@ -2982,8 +2999,19 @@
         let tmioAuthenticated = false;
 
         let tmioPbs = {};
+        const localReplayPbs = {};
 
         let preprocessedMaps = null;
+        let mapFetchController = null;
+        let mapFetchVersion = 0;
+        let mapsLoaded = false;
+        let filterSaveTimer = null;
+        let searchTimer = null;
+        let launchCloseTimer = null;
+        const dialogReturnFocus = new Map();
+        const tmioFailedUids = new Map();
+        let tmioSessionVersion = 0;
+        let tmioRetryTimer = null;
 
 
 
@@ -3021,7 +3049,7 @@
 
         function rendererLog(message) {
 
-            window.electronAPI.log(`[Renderer] ${message}`);
+            window.electronAPI.log(message).catch(() => {});
 
         }
 
@@ -3055,61 +3083,71 @@
 
         // Save filter state to electron-store
 
-        async function saveFilterState() {
-
-            const state = {
-
-                includeCached,
-
-                sortDirection,
-
+        function collectFilterState() {
+            return {
+                includeCached, sortDirection,
                 sortBy: document.getElementById('sortSelect').value,
-
                 yearRange: document.getElementById('yearRange').value,
-
                 searchTerm: document.getElementById('searchInput').value,
-
-                colorFilters,
-
-                seasonFilters,
-
-                historyLimit
-
+                colorFilters: { ...colorFilters }, seasonFilters: { ...seasonFilters }, historyLimit
             };
-
-            await window.electronAPI.saveFilterState(state);
-
         }
 
+        function saveFilterState() {
+            clearTimeout(filterSaveTimer);
+            filterSaveTimer = setTimeout(flushFilterState, 250);
+        }
 
+        async function flushFilterState() {
+            clearTimeout(filterSaveTimer);
+            try {
+                const result = await window.electronAPI.saveFilterState(collectFilterState());
+                if (!result.success) throw new Error(result.error || 'Could not save settings');
+            } catch (error) {
+                rendererLog(`[Settings] ${error.message}`);
+                showToast('Could not save your settings. Please retry.', 'error');
+            }
+        }
+
+        function scheduleSearch() {
+            saveFilterState();
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(applyFilters, 120);
+        }
 
         // Load filter state from electron-store
 
         async function loadFilterState() {
 
-            const saved = await window.electronAPI.loadFilterState();
+            let saved;
+            try { saved = await window.electronAPI.loadFilterState(); }
+            catch (error) { rendererLog(`[Settings] ${error.message}`); return; }
 
             if (saved) {
 
                 try {
 
-                    if (saved.includeCached !== undefined) includeCached = saved.includeCached;
+                    if (typeof saved.includeCached === 'boolean') includeCached = saved.includeCached;
 
-                    if (saved.sortDirection !== undefined) sortDirection = saved.sortDirection;
+                    if (['asc', 'desc'].includes(saved.sortDirection)) sortDirection = saved.sortDirection;
 
                     if (saved.sortBy) window._savedSortBy = saved.sortBy;
 
-                    if (saved.yearRange) window._savedYearRange = saved.yearRange;
+                    if (typeof saved.yearRange === 'string') window._savedYearRange = saved.yearRange;
 
                     if (saved.searchTerm) window._savedSearchTerm = saved.searchTerm;
 
-                    if (saved.colorFilters) Object.assign(colorFilters, saved.colorFilters);
+                    if (saved.colorFilters) for (const key of Object.keys(colorFilters)) {
+                        if (typeof saved.colorFilters[key] === 'boolean') colorFilters[key] = saved.colorFilters[key];
+                    }
 
-                    if (saved.seasonFilters) Object.assign(seasonFilters, saved.seasonFilters);
+                    if (saved.seasonFilters) for (const key of Object.keys(seasonFilters)) {
+                        if (typeof saved.seasonFilters[key] === 'boolean') seasonFilters[key] = saved.seasonFilters[key];
+                    }
 
-                    if (saved.historyLimit !== undefined) historyLimit = saved.historyLimit;
+                    if ([0, 20, 60, 100].includes(saved.historyLimit)) historyLimit = saved.historyLimit;
 
-                } catch (e) {}
+                } catch (e) { rendererLog(`[Settings] Invalid saved filters: ${e.message}`); }
 
             }
 
@@ -3135,13 +3173,15 @@
 
             if (window._savedSortBy) {
 
-                document.getElementById('sortSelect').value = window._savedSortBy;
+                const select = document.getElementById('sortSelect');
+                if ([...select.options].some(option => option.value === window._savedSortBy)) select.value = window._savedSortBy;
 
             }
 
-            if (window._savedYearRange) {
+            if (window._savedYearRange !== undefined) {
 
-                document.getElementById('yearRange').value = window._savedYearRange;
+                const select = document.getElementById('yearRange');
+                if ([...select.options].some(option => option.value === window._savedYearRange)) select.value = window._savedYearRange;
 
             }
 
@@ -3174,6 +3214,7 @@
             document.getElementById('seasonSummer').classList.toggle('active', seasonFilters.Summer);
 
             document.getElementById('seasonAutumn').classList.toggle('active', seasonFilters.Autumn);
+            syncFilterAccessibility();
 
         }
 
@@ -3207,7 +3248,7 @@
 
             // Set default to current year
 
-            if (!window._savedYearRange) {
+            if (window._savedYearRange === undefined || ![...yearRangeSelect.options].some(option => option.value === window._savedYearRange)) {
 
                 yearRangeSelect.value = `${currentYear}`;
 
@@ -3249,6 +3290,16 @@
 
         // Toggle include cached maps
 
+        function syncFilterAccessibility() {
+            document.getElementById('cachedToggle').setAttribute('aria-pressed', String(includeCached));
+            for (const [color, active] of Object.entries(colorFilters)) {
+                document.getElementById('color' + color.charAt(0).toUpperCase() + color.slice(1)).setAttribute('aria-pressed', String(active));
+            }
+            for (const [season, active] of Object.entries(seasonFilters)) {
+                document.getElementById('season' + season).setAttribute('aria-pressed', String(active));
+            }
+        }
+
         function toggleIncludeCached() {
 
             includeCached = !includeCached;
@@ -3256,6 +3307,7 @@
             const toggle = document.getElementById('cachedToggle');
 
             toggle.classList.toggle('active', includeCached);
+            syncFilterAccessibility();
 
             saveFilterState();
 
@@ -3272,6 +3324,7 @@
             colorFilters[color] = !colorFilters[color];
 
             document.getElementById('color' + color.charAt(0).toUpperCase() + color.slice(1)).classList.toggle('active', colorFilters[color]);
+            syncFilterAccessibility();
 
             saveFilterState();
 
@@ -3288,6 +3341,7 @@
             seasonFilters[season] = !seasonFilters[season];
 
             document.getElementById('season' + season).classList.toggle('active', seasonFilters[season]);
+            syncFilterAccessibility();
 
             saveFilterState();
 
@@ -3404,8 +3458,10 @@
                 if (!Array.isArray(trackHistory)) {
 
                     trackHistory = [];
-
                 }
+                trackHistory = trackHistory.filter(item => item && /^\d{1,12}$/.test(String(item.mapId)) && Number(item.mapId) > 0)
+                    .map(item => ({ ...item, mapId: String(Number(item.mapId)), mapName: String(item.mapName || `Track ${item.mapId}`) }));
+                if (historyLimit > 0) trackHistory = trackHistory.slice(0, historyLimit);
 
             } catch (error) {
 
@@ -3419,7 +3475,13 @@
 
         function saveTrackHistory() {
 
-            localStorage.setItem(TRACK_HISTORY_KEY, JSON.stringify(trackHistory));
+            try {
+                localStorage.setItem(TRACK_HISTORY_KEY, JSON.stringify(trackHistory));
+            } catch (error) {
+                rendererLog(`[History] Save failed: ${error.message}`);
+                showToast('Could not save launch history.', 'error');
+                throw error;
+            }
 
         }
 
@@ -3507,7 +3569,7 @@
 
                     await loadTmioStatus();
 
-                    fetchMaps();
+                    resetRendererPbs();
 
                 } else {
 
@@ -3551,7 +3613,7 @@
 
                     await loadTmioStatus();
 
-                    fetchMaps();
+                    resetRendererPbs();
 
                 } else {
 
@@ -3579,7 +3641,14 @@
 
         async function clearTmioAuthToken() {
 
-            await window.electronAPI.tmioSaveAuthToken('');
+            try {
+                const result = await window.electronAPI.tmioSaveAuthToken('');
+                if (!result.success) throw new Error(result.error);
+            } catch (error) {
+                rendererLog(`[TMIO] Disconnect failed: ${error.message}`);
+                setTmioSettingsStatus('Could not disconnect. Please retry.', 'error');
+                return;
+            }
 
             tmioAuthToken = null;
 
@@ -3595,7 +3664,7 @@
 
             await loadTmioStatus();
 
-            fetchMaps();
+            resetRendererPbs();
 
         }
 
@@ -3834,7 +3903,7 @@
 
             return `
 
-                <div class="history-item" onclick="reopenHistoryTrack('${item.mapId}')">
+                <div class="history-item" role="button" tabindex="0" aria-label="Replay ${escapeHtml(item.mapName)}" onkeydown="handleControlKeydown(event)" onclick="reopenHistoryTrack('${item.mapId}')">
 
                     <div class="history-item-thumb">
 
@@ -3895,6 +3964,8 @@
 
 
         function openHistoryDrawer() {
+            if (activeLaunch) return;
+            if (!document.getElementById('settingsOverlay').classList.contains('is-hidden')) closeSettings();
 
             rendererLog(`[History] openHistoryDrawer called, trackHistory.length=${trackHistory.length}`);
 
@@ -3905,6 +3976,8 @@
             document.getElementById('historyDrawerOverlay').classList.add('open');
 
             document.getElementById('historyDrawer').setAttribute('aria-hidden', 'false');
+            document.getElementById('historyDrawer').inert = false;
+            rememberDialogFocus('historyDrawer');
 
             if (trackHistory.length > 0) {
 
@@ -4038,6 +4111,8 @@
             document.getElementById('historyDrawerOverlay').classList.remove('open');
 
             document.getElementById('historyDrawer').setAttribute('aria-hidden', 'true');
+            document.getElementById('historyDrawer').inert = true;
+            restoreDialogFocus('historyDrawer');
 
         }
 
@@ -4171,7 +4246,7 @@
 
         function handleDownloadProgress(data) {
 
-            if (!activeLaunch || data.mapId !== activeLaunch.mapId) {
+            if (!activeLaunch || String(data.mapId) !== activeLaunch.mapId) {
 
                 return;
 
@@ -4189,7 +4264,10 @@
 
 
 
-            progressBar.style.width = `${data.progress}%`;
+            if (Number.isFinite(data.progress)) {
+                progressBar.style.width = `${Math.max(0, Math.min(100, data.progress))}%`;
+                progressBar.setAttribute('aria-valuenow', String(data.progress));
+            }
 
 
 
@@ -4247,11 +4325,12 @@
 
                     progressText.textContent = 'Complete!';
 
-                    addTrackToHistory(activeLaunch.mapId, activeLaunch.mapName);
+                    try { addTrackToHistory(activeLaunch.mapId, activeLaunch.mapName); }
+                    catch (error) { rendererLog(`[History] ${error.message}`); }
 
-                    cachedMapsIds.add(activeLaunch.mapId);
+                    cachedMapsIds.add(Number(activeLaunch.mapId));
 
-                    const mapCard = document.querySelector(`.map-card[onclick*="'${activeLaunch.mapId}'"]`);
+                    const mapCard = document.querySelector(`.map-card[data-map-id="${activeLaunch.mapId}"]`);
 
                     if (mapCard && !mapCard.querySelector('.cached-indicator')) {
 
@@ -4275,29 +4354,23 @@
 
                     }
 
-                    setTimeout(() => {
-
-                        progressOverlay.style.display = 'none';
-
-                        activeLaunch = null;
-
-                    }, 1000);
+                    finishLaunchAfter(700);
+                    if (!includeCached) applyFilters();
 
                     break;
 
                 }
+
+                case 'cancelled':
+                    finishLaunchAfter(0);
+                    break;
 
                 case 'error':
 
                     progressText.textContent = `Error: ${data.error}`;
 
-                    setTimeout(() => {
-
-                        progressOverlay.style.display = 'none';
-
-                        activeLaunch = null;
-
-                    }, 3000);
+                    showToast(data.error || 'Could not launch map', 'error', 6000);
+                    finishLaunchAfter(1500);
 
                     break;
 
@@ -4307,88 +4380,70 @@
 
 
 
-async function fetchMaps() {
-
-            const content = document.getElementById('content');
-
-            content.innerHTML = '<div class="loading">Loading maps</div>';
-
-
-
-            try {
-
-                const url = buildApiUrl();
-
-                window.electronAPI.log(`Fetching maps from: ${url}`);
-
-                const response = await fetch(url);
-
-                window.electronAPI.log(`Maps API response status: ${response.status}`);
-
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-
-
-                const data = await response.json();
-
-                allMaps = data.Results || [];
-
-                window.electronAPI.log(`Received ${allMaps.length} maps from API`);
-
-
-                // trackmania.io PBs are fetched lazily via IntersectionObserver in displayMaps()
-
-                
-
-                // Pre-check cached status for all maps
-
-                content.innerHTML = '<div class="loading">Checking cached maps...</div>';
-
-                cachedMapsIds.clear();
-
-                
-
-                // Check cached status in batches for performance
-
-                const batchSize = 50;
-
-                for (let i = 0; i < allMaps.length; i += batchSize) {
-
-                    const batch = allMaps.slice(i, i + batchSize);
-
-                    await Promise.all(batch.map(async (map) => {
-
-                        if (await window.electronAPI.isMapCached(map.MapId)) {
-
-                            cachedMapsIds.add(map.MapId);
-
-                        }
-
-                    }));
-
-                }
-
-                
-
-                updateSeasonCounts();
-
-                enrichHistoryWithMapData();
-
-                preprocessMaps();
-
-                applyFilters();
-
-            } catch (error) {
-
-                content.innerHTML = `<div class="error">Failed to load maps: ${error.message}</div>`;
-
+        function setMapStatus(message, retry = false) {
+            const status = document.getElementById('mapStatus');
+            status.textContent = message;
+            if (retry) {
+                const button = document.createElement('button');
+                button.className = 'action-btn';
+                button.textContent = 'Retry';
+                button.setAttribute('onclick', 'fetchMaps()');
+                status.appendChild(button);
             }
-
         }
 
-
+        async function fetchMaps() {
+            mapFetchController?.abort();
+            const controller = new AbortController();
+            mapFetchController = controller;
+            const version = ++mapFetchVersion;
+            const timeout = setTimeout(() => controller.abort('timeout'), 30000);
+            const content = document.getElementById('content');
+            content.setAttribute('aria-busy', 'true');
+            setMapStatus(mapsLoaded ? 'Updating maps…' : 'Loading maps…');
+            try {
+                const [response, cached] = await Promise.all([
+                    fetch(buildApiUrl(), { signal: controller.signal }),
+                    window.electronAPI.getCachedMapIds()
+                ]);
+                if (!response.ok) throw new Error(`Map server returned HTTP ${response.status}`);
+                const data = await response.json();
+                if (!data || !Array.isArray(data.Results)) throw new Error('Map server returned an invalid response');
+                if (version !== mapFetchVersion) return;
+                if (controller.signal.aborted) throw new Error('Map request timed out');
+                allMaps = data.Results.filter(map => map && Number.isSafeInteger(Number(map.MapId)) && Number(map.MapId) > 0)
+                    .map(map => ({
+                        ...map, MapId: Number(map.MapId), Name: String(map.Name || `Track ${map.MapId}`),
+                        MapUid: typeof map.MapUid === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(map.MapUid) ? map.MapUid : '',
+                        DownloadCount: Math.max(0, Number(map.DownloadCount) || 0),
+                        AwardCount: Math.max(0, Number(map.AwardCount) || 0),
+                        ReplayCount: Math.max(0, Number(map.ReplayCount) || 0),
+                    }));
+                if (cached.success) cachedMapsIds = new Set(cached.mapIds);
+                else showToast('Could not check downloaded maps.', 'error');
+                preprocessedMaps = null;
+                mapsLoaded = true;
+                clearQueuedPbs();
+                updateSeasonCounts();
+                enrichHistoryWithMapData();
+                preprocessMaps();
+                applyFilters();
+                setMapStatus('');
+            } catch (error) {
+                if (version !== mapFetchVersion) return;
+                rendererLog(`[Maps] ${error.message}`);
+                const message = controller.signal.reason === 'timeout' ? 'Loading maps timed out. Check your connection and retry.' : 'Could not load maps. Check your connection and retry.';
+                if (!mapsLoaded) content.innerHTML = '';
+                setMapStatus(message, true);
+            } finally {
+                clearTimeout(timeout);
+                if (version === mapFetchVersion) content.setAttribute('aria-busy', 'false');
+            }
+        }
 
         function applyFilters() {
+            if (!mapsLoaded) return;
+            clearTimeout(searchTimer);
 
             if (!preprocessedMaps) preprocessMaps();
 
@@ -4575,80 +4630,89 @@ async function fetchMaps() {
         let tmioLoadingUids = new Set();
         let tmioNoRecordUids = new Set();
 
-        function setupTmioObserver() {
-            if (tmioObserver) {
-                tmioObserver.disconnect();
-            }
-            if (!tmioAuthenticated) return;
+        function clearQueuedPbs() {
+            for (const uid of tmioFetchQueue) tmioLoadingUids.delete(uid);
+            tmioFetchQueue.clear();
+        }
 
-            tmioObserver = new IntersectionObserver((entries) => {
+        function resetRendererPbs() {
+            tmioSessionVersion++;
+            tmioObserver?.disconnect();
+            clearTimeout(tmioRetryTimer);
+            clearQueuedPbs();
+            tmioLoadingUids.clear();
+            tmioNoRecordUids.clear();
+            tmioFailedUids.clear();
+            tmioPbs = {};
+            applyFilters();
+        }
+
+        function setupTmioObserver() {
+            tmioObserver?.disconnect();
+            clearTimeout(tmioRetryTimer);
+            if (!tmioAuthenticated) return;
+            let nextRetryAt = Infinity;
+            tmioObserver = new IntersectionObserver(entries => {
                 for (const entry of entries) {
-                    if (entry.isIntersecting) {
-                        const card = entry.target;
-                        const mapUid = card.getAttribute('data-map-uid');
-                        const mapId = card.getAttribute('data-map-id');
-                        if (mapUid && !tmioPbs[mapUid] && !tmioFetchQueue.has(mapUid)) {
-                            tmioFetchQueue.add(mapUid);
-                            tmioLoadingUids.add(mapUid);
-                            tmioObserver.unobserve(card);
-                        }
+                    if (!entry.isIntersecting) continue;
+                    const mapUid = entry.target.dataset.mapUid;
+                    if (mapUid && !tmioPbs[mapUid] && !tmioNoRecordUids.has(mapUid) && !tmioLoadingUids.has(mapUid)
+                        && !tmioFetchQueue.has(mapUid) && (tmioFailedUids.get(mapUid) || 0) <= Date.now()) {
+                        tmioFetchQueue.add(mapUid);
+                        tmioLoadingUids.add(mapUid);
+                        tmioFailedUids.delete(mapUid);
+                        tmioObserver.unobserve(entry.target);
                     }
                 }
-                if (!tmioFetchInProgress) {
-                    processTmioQueue();
-                }
-            }, {
-                rootMargin: '200px',
-                threshold: 0,
-            });
-
+                processTmioQueue();
+            }, { rootMargin: '200px', threshold: 0 });
             document.querySelectorAll('.map-card[data-map-uid]').forEach(card => {
-                const mapUid = card.getAttribute('data-map-uid');
-                if (mapUid && !tmioPbs[mapUid]) {
-                    tmioObserver.observe(card);
-                }
+                const uid = card.dataset.mapUid;
+                if (!uid || tmioPbs[uid] || tmioNoRecordUids.has(uid)) return;
+                const retryAt = tmioFailedUids.get(uid) || 0;
+                if (retryAt > Date.now()) nextRetryAt = Math.min(nextRetryAt, retryAt);
+                else tmioObserver.observe(card);
             });
+            if (Number.isFinite(nextRetryAt)) tmioRetryTimer = setTimeout(setupTmioObserver, Math.max(1, nextRetryAt - Date.now()));
         }
 
         async function processTmioQueue() {
-            if (tmioFetchInProgress || tmioFetchQueue.size === 0) return;
+            if (tmioFetchInProgress || !tmioAuthenticated || tmioFetchQueue.size === 0) return;
             tmioFetchInProgress = true;
-
-            const BATCH_SIZE = 3;
-            const DELAY_MS = 400;
-
-            while (tmioFetchQueue.size > 0) {
-                const batch = [];
-                for (const uid of tmioFetchQueue) {
-                    batch.push(uid);
-                    tmioFetchQueue.delete(uid);
-                    if (batch.length >= BATCH_SIZE) break;
-                }
-
-                const promises = batch.map(mapUid =>
-                    window.electronAPI.tmioGetPbSingle({ mapUid })
-                        .then(result => ({ mapUid, result }))
-                        .catch(error => ({ mapUid, result: { success: false, error: error.message } }))
-                );
-
-                const settled = await Promise.all(promises);
-
-                for (const { mapUid, result } of settled) {
+            const session = tmioSessionVersion;
+            try {
+                // The main process spaces every request, including history and replay refreshes.
+                while (tmioFetchQueue.size && tmioAuthenticated && session === tmioSessionVersion) {
+                    const mapUid = tmioFetchQueue.values().next().value;
+                    tmioFetchQueue.delete(mapUid);
+                    let result;
+                    try { result = await window.electronAPI.tmioGetPbSingle({ mapUid }); }
+                    catch (error) { result = { success: false, error: error.message }; }
+                    if (session !== tmioSessionVersion) break;
                     tmioLoadingUids.delete(mapUid);
-                    if (result.success && result.pb) {
-                        tmioPbs[mapUid] = result.pb;
+                    if (result.success) {
+                        if (result.pb) tmioPbs[mapUid] = result.pb;
+                        else tmioNoRecordUids.add(mapUid);
+                        tmioFailedUids.delete(mapUid);
                     } else {
-                        tmioNoRecordUids.add(mapUid);
+                        tmioFailedUids.set(mapUid, Date.now() + Math.max(30000, result.retryAfterMs || 0));
+                        rendererLog(`[TMIO] ${result.error}`);
+                        if (result.retryAfterMs) {
+                            for (const uid of tmioFetchQueue) {
+                                tmioFailedUids.set(uid, Date.now() + result.retryAfterMs);
+                                tmioLoadingUids.delete(uid);
+                                updateMapCardPb(uid);
+                            }
+                            clearQueuedPbs();
+                            showToast('PB requests paused by trackmania.io. They will retry automatically.', 'info');
+                        }
                     }
                     updateMapCardPb(mapUid);
                 }
-
-                if (tmioFetchQueue.size > 0) {
-                    await new Promise(r => setTimeout(r, DELAY_MS));
-                }
+            } finally {
+                tmioFetchInProgress = false;
+                setupTmioObserver();
             }
-
-            tmioFetchInProgress = false;
         }
 
         function updateMapCardPb(mapUid) {
@@ -4688,6 +4752,8 @@ async function fetchMaps() {
 
 
             if (!maps || maps.length === 0) {
+                tmioObserver?.disconnect();
+                clearQueuedPbs();
 
                 content.innerHTML = '<div class="error">No maps found. Try adjusting your filters!</div>';
 
@@ -4721,7 +4787,7 @@ async function fetchMaps() {
 
                 const escapedName = escapeHtml(map.Name);
 
-                const nameAttr = map.Name.replace(/'/g, "\\'");
+
 
                 const borderClass = getSeasonBorderClass(map.Name);
 
@@ -4747,7 +4813,7 @@ async function fetchMaps() {
 
                 return `
 
-                <div class="map-card ${borderClass}" onclick="handleMapClick(event, '${map.MapId}', '${nameAttr}')" data-map-uid="${mapUid}" data-map-id="${map.MapId}">
+                <div class="map-card ${borderClass}" role="button" tabindex="0" aria-label="${escapedName}" onclick="handleMapClick(event, this.dataset.mapId, this.dataset.mapName)" onkeydown="handleControlKeydown(event)" data-map-name="${escapedName}" data-map-uid="${mapUid}" data-map-id="${map.MapId}">
 
                     ${isCached ? _cachedSvgHtml : ''}
 
@@ -4797,6 +4863,13 @@ async function fetchMaps() {
 
             content.innerHTML = html;
 
+            const visibleUids = new Set(maps.map(map => map.MapUid));
+            for (const uid of tmioFetchQueue) {
+                if (!visibleUids.has(uid)) {
+                    tmioFetchQueue.delete(uid);
+                    tmioLoadingUids.delete(uid);
+                }
+            }
             setupTmioObserver();
 
         }
@@ -4809,7 +4882,7 @@ async function fetchMaps() {
 
             _escapeDiv.textContent = text;
 
-            return _escapeDiv.innerHTML;
+            return _escapeDiv.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
         }
 
@@ -4888,7 +4961,8 @@ async function fetchMaps() {
             const mapUid = map?.MapUid;
             const tmioPb = mapUid && tmioPbs[mapUid] ? tmioPbs[mapUid].time : null;
 
-            return normalizeRecordTime(tmioPb);
+            const times = [normalizeRecordTime(tmioPb), normalizeRecordTime(localReplayPbs[mapUid])].filter(time => time > 0);
+            return times.length ? Math.min(...times) : null;
 
         }
 
@@ -4925,6 +4999,9 @@ async function fetchMaps() {
 
             if (!tmioAuthenticated && !pbTime) return '';
 
+            if (mapUid && tmioFailedUids.has(mapUid) && !pbTime) {
+                return '<div class="personal-best empty" title="PB lookup failed. Retrying automatically."><span class="personal-best-label">PB</span><span>Retrying…</span></div>';
+            }
             if (mapUid && tmioNoRecordUids.has(mapUid) && !pbTime) return '';
 
             const alreadyFetched = mapUid && (tmioPbs[mapUid] || tmioNoRecordUids.has(mapUid));
@@ -4968,7 +5045,8 @@ async function fetchMaps() {
 
         async function handleMapClick(event, mapId, mapName) {
 
-            if (event.ctrlKey) {
+            mapId = String(mapId);
+            if (event.ctrlKey || event.metaKey) {
 
                 window.open(`https://trackmania.exchange/tracks/${mapId}`, '_blank');
 
@@ -4978,7 +5056,7 @@ async function fetchMaps() {
 
             
 
-            if (activeLaunch && activeLaunch.mapId === mapId) {
+            if (activeLaunch) {
 
                 return;
 
@@ -4996,6 +5074,7 @@ async function fetchMaps() {
 
             
 
+            closeHistoryDrawer();
             activeLaunch = { mapId, mapName };
 
             progressTitle.textContent = `Downloading ${mapName}...`;
@@ -5004,11 +5083,22 @@ async function fetchMaps() {
 
             progressText.textContent = 'Starting...';
 
-            progressOverlay.style.display = 'flex';
+            clearTimeout(launchCloseTimer);
+            document.getElementById('cancelLaunchBtn').disabled = false;
+            showDialog('progressOverlay');
 
             
 
-            await window.electronAPI.openTrackmania(mapId);
+            const launch = activeLaunch;
+            try {
+                const result = await window.electronAPI.openTrackmania(mapId);
+                if (activeLaunch === launch && !result.success && !result.cancelled) {
+                    handleDownloadProgress({ mapId, status: 'error', error: result.error || 'Could not launch map' });
+                }
+            } catch (error) {
+                rendererLog(`[Open] ${error.message}`);
+                if (activeLaunch === launch) handleDownloadProgress({ mapId, status: 'error', error: 'Could not launch map. Please retry.' });
+            }
 
         }
 
@@ -5058,8 +5148,8 @@ async function fetchMaps() {
 
             if (shouldCleanHistory) {
 
+                trackHistory = [];
                 localStorage.removeItem(TRACK_HISTORY_KEY);
-
                 renderTrackHistory();
 
             }
@@ -5087,12 +5177,14 @@ async function fetchMaps() {
         // Settings modal functions
 
         function openSettings() {
+            if (activeLaunch) return;
+            closeHistoryDrawer();
 
-            document.getElementById('settingsOverlay').style.display = 'flex';
+            showDialog('settingsOverlay');
 
             setHistorySettingsStatus('', '');
 
-            setTmxSettingsStatus('', '');
+
 
             document.getElementById('historyLimitSelect').value = String(historyLimit);
 
@@ -5102,7 +5194,8 @@ async function fetchMaps() {
 
         function closeSettings() {
 
-            document.getElementById('settingsOverlay').style.display = 'none';
+            hideDialog('settingsOverlay');
+            flushFilterState();
 
             setHistorySettingsStatus('', '');
 
@@ -5142,61 +5235,133 @@ async function fetchMaps() {
 
 
 
-        document.addEventListener('keydown', async (event) => {
-
-            if (event.key === 'Escape') {
-
-                closeHistoryDrawer();
-
-                const progressOverlay = document.getElementById('progressOverlay');
-
-                if (activeLaunch && progressOverlay.style.display !== 'none') {
-
-                    progressOverlay.style.display = 'none';
-
-                    const cancelledMapId = activeLaunch.mapId;
-
-                    activeLaunch = null;
-
-                    await window.electronAPI.cancelDownload(cancelledMapId);
-
-                }
-
+        function handleControlKeydown(event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                event.currentTarget.click();
             }
+        }
 
+        function rememberDialogFocus(id) {
+            dialogReturnFocus.set(id, document.activeElement);
+            document.getElementById(id).querySelector('button, input, select')?.focus();
+        }
+
+        function restoreDialogFocus(id) {
+            const previous = dialogReturnFocus.get(id);
+            if (previous?.isConnected) previous.focus();
+            dialogReturnFocus.delete(id);
+        }
+
+        function showDialog(id) {
+            document.getElementById(id).classList.remove('is-hidden');
+            rememberDialogFocus(id);
+        }
+
+        function hideDialog(id) {
+            document.getElementById(id).classList.add('is-hidden');
+            restoreDialogFocus(id);
+        }
+
+        function finishLaunchAfter(ms) {
+            clearTimeout(launchCloseTimer);
+            const launch = activeLaunch;
+            document.getElementById('cancelLaunchBtn').disabled = true;
+            launchCloseTimer = setTimeout(() => {
+                if (activeLaunch !== launch) return;
+                hideDialog('progressOverlay');
+                activeLaunch = null;
+            }, ms);
+        }
+
+        async function cancelActiveLaunch() {
+            if (!activeLaunch) return;
+            const button = document.getElementById('cancelLaunchBtn');
+            if (button.disabled) return;
+            const launch = activeLaunch;
+            button.disabled = true;
+            document.getElementById('progressText').textContent = 'Cancelling…';
+            try {
+                await window.electronAPI.cancelDownload(launch.mapId);
+                if (activeLaunch === launch) finishLaunchAfter(0);
+            } catch (error) {
+                rendererLog(`[Open] Cancel failed: ${error.message}`);
+                button.disabled = false;
+                showToast('Could not cancel launch. Please retry.', 'error');
+            }
+        }
+
+        function currentDialog() {
+            if (!document.getElementById('progressOverlay').classList.contains('is-hidden')) return document.getElementById('progressOverlay');
+            if (!document.getElementById('settingsOverlay').classList.contains('is-hidden')) return document.getElementById('settingsOverlay');
+            if (document.getElementById('historyDrawer').classList.contains('open')) return document.getElementById('historyDrawer');
+            return null;
+        }
+
+        document.addEventListener('keydown', event => {
+            const dialog = currentDialog();
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                if (dialog?.id === 'progressOverlay') cancelActiveLaunch();
+                else if (dialog?.id === 'settingsOverlay') closeSettings();
+                else if (dialog?.id === 'historyDrawer') closeHistoryDrawer();
+                else if (document.activeElement.id === 'searchInput') {
+                    document.getElementById('searchInput').value = '';
+                    scheduleSearch();
+                }
+            } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && !dialog) {
+                event.preventDefault();
+                document.getElementById('searchInput').focus();
+                document.getElementById('searchInput').select();
+            } else if (event.key === 'Tab' && dialog) {
+                const focusable = [...dialog.querySelectorAll('button, input, select, [tabindex="0"]')]
+                    .filter(element => !element.disabled && element.getClientRects().length);
+                if (!focusable.length) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (!dialog.contains(document.activeElement) || (event.shiftKey && document.activeElement === first)) {
+                    event.preventDefault(); last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault(); first.focus();
+                }
+            }
         });
-
-
+        window.addEventListener('beforeunload', () => {
+            if (filterSaveTimer) window.electronAPI.saveFilterState(collectFilterState()).catch(() => {});
+        });
 
         window.electronAPI.onDownloadProgress(handleDownloadProgress);
 
-        window.electronAPI.onReplayNewPb(async ({ mapUid }) => {
-            if (!tmioAuthenticated) return;
-            if (!mapUid) return;
-
-            const card = document.querySelector(`.map-card[data-map-uid="${mapUid}"]`);
-            if (!card) return;
-
-            const rect = card.getBoundingClientRect();
-            const visible = rect.bottom > 0 && rect.top < window.innerHeight;
-            if (!visible) return;
-
-            try {
-                const result = await window.electronAPI.tmioGetPbSingle({ mapUid });
-                if (result.success && result.pb) {
-                    tmioPbs[mapUid] = result.pb;
-                } else {
-                    tmioNoRecordUids.add(mapUid);
+        window.electronAPI.onReplayNewPb(async ({ mapUid, time }) => {
+            if (typeof mapUid !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(mapUid)) return;
+            const pb = normalizeRecordTime(time);
+            if (pb) {
+                localReplayPbs[mapUid] = Math.min(localReplayPbs[mapUid] || Infinity, pb);
+                for (const item of trackHistory) {
+                    if (item.mapUid === mapUid) item.pbTime = Math.min(item.pbTime || Infinity, pb);
                 }
-                tmioLoadingUids.delete(mapUid);
-                tmioFetchQueue.delete(mapUid);
+                try { saveTrackHistory(); } catch (error) { rendererLog(`[History] ${error.message}`); }
+                renderTrackHistory();
+                updateMapCardPb(mapUid);
+            }
+            // Local replay time appears immediately; the online record may arrive later.
+            if (!tmioAuthenticated) return;
+            const session = tmioSessionVersion;
+            try {
+                const result = await window.electronAPI.tmioGetPbSingle({ mapUid, forceRefresh: true });
+                if (session !== tmioSessionVersion) return;
+                if (result.success && result.pb) tmioPbs[mapUid] = result.pb;
+                else if (!result.success) rendererLog(`[Replay] ${result.error}`);
                 updateMapCardPb(mapUid);
             } catch (error) {
-                log(`Failed to refresh PB for ${mapUid}: ${error.message}`);
+                rendererLog(`[Replay] Failed to refresh PB: ${error.message}`);
             }
         });
 
-        init();
+        init().catch(error => {
+            rendererLog(`[Startup] ${error.message}`);
+            setMapStatus('Could not initialize the app. Please restart TrackHunter.');
+        });
 
     </script>
 

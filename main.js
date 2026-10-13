@@ -1,20 +1,27 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
-const { spawn, execSync } = require('child_process');
+const { spawn, execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
 const fs = require('fs');
 const os = require('os');
 const http = require('http');
 const https = require('https');
 const gbxremote = require('gbxremote');
+const { Transform } = require('stream');
+const { pipeline } = require('stream/promises');
+const { setTimeout: delay } = require('timers/promises');
 
 let config = {};
 let cancelDownloadId = null;
 let activeDownloadId = null;
+let launchAbortController = null;
 const configPath = path.join(app.getPath('userData'), 'config.json');
 
-function getTrackmaniaProcessIds() {
+async function getTrackmaniaProcessIds() {
+    if (process.platform !== 'win32') return [];
     try {
-        const output = execSync('tasklist /FI "IMAGENAME eq Trackmania.exe" /FO CSV /NH', { encoding: 'utf8' });
+        const { stdout: output } = await execFileAsync('tasklist', ['/FI', 'IMAGENAME eq Trackmania.exe', '/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true, timeout: 10000 });
         const lines = output
             .split(/\r?\n/)
             .map(line => line.trim())
@@ -36,15 +43,16 @@ function getTrackmaniaProcessIds() {
 
         return processIds;
     } catch (error) {
+        log(`[Game] Process detection failed: ${error.message}`);
         return [];
     }
 }
 
-function checkTrackmaniaRunning() {
-    return getTrackmaniaProcessIds().length > 0;
+async function checkTrackmaniaRunning() {
+    return (await getTrackmaniaProcessIds()).length > 0;
 }
 
-function probeTrackmaniaSessionReady(timeoutMs = 4000) {
+function probeTrackmaniaSessionReady(timeoutMs = 4000, signal = launchAbortController?.signal) {
     return new Promise((resolve) => {
         let settled = false;
         let client = null;
@@ -57,6 +65,7 @@ function probeTrackmaniaSessionReady(timeoutMs = 4000) {
 
             settled = true;
             clearTimeout(timeoutHandle);
+            signal?.removeEventListener('abort', onAbort);
             try {
                 if (client) {
                     client.terminate();
@@ -66,9 +75,12 @@ function probeTrackmaniaSessionReady(timeoutMs = 4000) {
             resolve({ ready, reason });
         };
 
+        const onAbort = () => finish(false, 'cancelled');
         const timeoutHandle = setTimeout(() => {
             finish(false, 'gbx-timeout');
         }, timeoutMs);
+        if (signal?.aborted) { onAbort(); return; }
+        signal?.addEventListener('abort', onAbort, { once: true });
 
         (async () => {
             try {
@@ -92,11 +104,12 @@ function probeTrackmaniaSessionReady(timeoutMs = 4000) {
                 const serverLogin = String(systemInfo?.ServerLogin || '').trim();
                 const hoursSinceZoneInscription = Number(detailedPlayer?.HoursSinceZoneInscription);
                 const playerRankings = detailedPlayer?.LadderStats?.PlayerRankings;
+                const hasRankingData = Array.isArray(playerRankings) && playerRankings.length > 0;
                 const playerPath = String(detailedPlayer?.Path || '');
 
                 // Trackmania 2020 online account keys are 22-character Base64Url strings (e.g. HSnSHgS2RsuSWjSccf0HHg)
                 // When still loading/offline, it uses a 36-character UUID with hyphens (e.g. bc14c157-f5b3-47bd-9085-2e8d7166adb0)
-                const isOnlineAccount = playerLogin.length > 0 && playerLogin.length < 36 && !playerLogin.includes('-');
+                const isOnlineAccount = /^[A-Za-z0-9_-]{22}$/.test(playerLogin);
                 
                 // When fully authenticated, Path usually resolves to something like "World|Europe|Albania"
                 // rather than just "World" 
@@ -133,7 +146,7 @@ async function waitForTrackmaniaLogin(event, mapId, timeoutMs = 180000) {
     const maxAttempts = Math.ceil(timeoutMs / pollIntervalMs);
     let stableChecks = 0;
 
-    event.sender.send('download-progress', {
+    sendDownloadProgress(event, {
         mapId,
         status: 'login-detecting',
         progress: 95,
@@ -147,6 +160,7 @@ async function waitForTrackmaniaLogin(event, mapId, timeoutMs = 180000) {
         }
 
         const probe = await probeTrackmaniaSessionReady();
+        launchAbortController.signal.throwIfAborted();
         if (probe.ready) {
             stableChecks += 1;
             if (stableChecks >= requiredStableChecks) {
@@ -158,7 +172,7 @@ async function waitForTrackmaniaLogin(event, mapId, timeoutMs = 180000) {
             stableChecks = 0;
         }
 
-        event.sender.send('download-progress', {
+        sendDownloadProgress(event, {
             mapId,
             status: 'login-detecting',
             progress: 95,
@@ -166,7 +180,7 @@ async function waitForTrackmaniaLogin(event, mapId, timeoutMs = 180000) {
             maxAttempts
         });
 
-        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+        await delay(pollIntervalMs, undefined, { signal: launchAbortController.signal });
     }
 
     throw new Error('Could not confirm Trackmania login in time. Please log in and retry.');
@@ -175,24 +189,28 @@ async function waitForTrackmaniaLogin(event, mapId, timeoutMs = 180000) {
 function loadConfig() {
     try {
         if (fs.existsSync(configPath)) {
-            config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            const saved = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            config = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
         }
     } catch (e) {
+        log(`[Settings] Could not load configuration: ${e.message}`);
         config = {};
     }
 }
 
 function saveConfig() {
     try {
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+        fs.mkdirSync(path.dirname(configPath), { recursive: true });
+        fs.writeFileSync(`${configPath}.tmp`, JSON.stringify(config, null, 2), { mode: 0o600 });
+        fs.renameSync(`${configPath}.tmp`, configPath);
     } catch (e) {
         log(`Error saving config: ${e.message}`);
+        throw e;
     }
 }
 
 let mainWindow;
 let replayWatcher = null;
-let replayDebounceTimer = null;
 const logFile = path.join(os.tmpdir(), 'trackmania-viewer.log');
 let localPbCache = null;
 let localPbCacheAt = 0;
@@ -214,8 +232,6 @@ let nadeoPbCacheAt = 0;
 const NADEO_PB_CACHE_TTL_MS = 60 * 1000;
 let oauthServer = null;
 
-let tmioPbCache = null;
-let tmioPbCacheAt = 0;
 const TMIO_PB_CACHE_TTL_MS = 60 * 1000;
 const TMIO_API_BASE = 'https://trackmania.io/api';
 const TMIO_RATE_LIMIT_MS = 1600; // ~40 requests per minute
@@ -223,7 +239,11 @@ const TMIO_RATE_LIMIT_MS = 1600; // ~40 requests per minute
 function log(message) {
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] ${message}\n`;
-    fs.appendFileSync(logFile, logMessage);
+    try {
+        fs.appendFileSync(logFile, logMessage);
+    } catch (error) {
+        console.error('[Log] Unable to write log file');
+    }
     console.log(logMessage);
 }
 
@@ -311,15 +331,20 @@ function httpsRequest(url, options = {}) {
             headers: options.headers || {},
         };
 
+        const requestTimeout = setTimeout(() => req.destroy(new Error('API request timed out')), 30000);
         const req = protocol.request(reqOptions, (res) => {
             let data = '';
+            res.on('error', error => { clearTimeout(requestTimeout); reject(error); });
+            res.on('aborted', () => { clearTimeout(requestTimeout); reject(new Error('API response interrupted')); });
             res.on('data', (chunk) => { data += chunk; });
             res.on('end', () => {
+                clearTimeout(requestTimeout);
                 resolve({ status: res.statusCode, headers: res.headers, body: data });
             });
         });
 
-        req.on('error', reject);
+        req.setTimeout(30000, () => req.destroy(new Error('API request timed out')));
+        req.on('error', error => { clearTimeout(requestTimeout); reject(error); });
 
         if (options.body) {
             req.write(options.body);
@@ -506,88 +531,100 @@ async function fetchNadeoPbs(mapUids) {
     }
 }
 
-async function tmioApiRequest(url, authToken) {
-    const headers = {
-        'Authorization': authToken,
-        'User-Agent': 'TrackHunter/1.0',
-    };
-    const response = await httpsRequest(url, { headers });
-    if (response.status === 429) {
-        throw new Error('Rate limited by trackmania.io');
+let tmioRequestQueue = Promise.resolve();
+let tmioNextRequestAt = 0;
+let tmioBlockedUntil = 0;
+let tmioAccountVersion = 0;
+const tmioRecordCache = new Map();
+const tmioPendingRecords = new Map();
+
+function validateMapUid(mapUid) {
+    if (typeof mapUid !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(mapUid)) {
+        throw new Error('Invalid map UID');
     }
-    if (response.status !== 200) {
-        throw new Error(`trackmania.io API error (${response.status})`);
-    }
-    return JSON.parse(response.body);
+    return mapUid;
 }
 
-let tmioFetchInProgress = false;
+async function tmioApiRequest(url, authToken, accountVersion = tmioAccountVersion) {
+    const request = tmioRequestQueue.then(async () => {
+        if (authToken !== config.tmioAuthToken || accountVersion !== tmioAccountVersion) throw new Error('Account changed');
+        if (Date.now() < tmioBlockedUntil) {
+            const error = new Error('Rate limited by trackmania.io. Please try again shortly.');
+            error.retryAfterMs = tmioBlockedUntil - Date.now();
+            throw error;
+        }
+        await delay(Math.max(0, tmioNextRequestAt - Date.now()));
+        if (authToken !== config.tmioAuthToken || accountVersion !== tmioAccountVersion) throw new Error('Account changed');
+        tmioNextRequestAt = Date.now() + TMIO_RATE_LIMIT_MS;
+        const response = await httpsRequest(url, { headers: {
+            'Authorization': authToken,
+            'User-Agent': 'TrackHunter/1.0',
+        } });
+        if (response.status === 429) {
+            const retryAfter = response.headers['retry-after'];
+            const seconds = Number(retryAfter);
+            const retryAfterMs = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryAfter) - Date.now();
+            tmioBlockedUntil = Date.now() + Math.max(60000, retryAfterMs || 0);
+            const error = new Error('Rate limited by trackmania.io. Please try again shortly.');
+            error.retryAfterMs = tmioBlockedUntil - Date.now();
+            throw error;
+        }
+        // A missing leaderboard is a successful lookup with no personal best.
+        if (response.status === 404) return null;
+        if (response.status !== 200) throw new Error(`trackmania.io API error (${response.status})`);
+        return JSON.parse(response.body);
+    });
+    tmioRequestQueue = request.catch(() => {});
+    return request;
+}
+
+function resetTmioCache() {
+    tmioAccountVersion++;
+    tmioRecordCache.clear();
+    tmioPendingRecords.clear();
+}
+
+async function getTmioPersonalBest(mapUid, forceRefresh = false) {
+    validateMapUid(mapUid);
+    const authToken = config.tmioAuthToken;
+    if (!authToken) throw new Error('Not authenticated');
+    const accountVersion = tmioAccountVersion;
+    const key = `${accountVersion}:${mapUid}`;
+    const cached = tmioRecordCache.get(key);
+    if (!forceRefresh && cached && Date.now() - cached.at < TMIO_PB_CACHE_TTL_MS) return cached.pb;
+    if (tmioPendingRecords.has(key)) {
+        const pending = tmioPendingRecords.get(key);
+        if (!forceRefresh) return pending;
+        try { await pending; } catch (error) { log('[TMIO] Retrying pending lookup after replay update'); }
+        if (accountVersion !== tmioAccountVersion) throw new Error('Account changed');
+        return getTmioPersonalBest(mapUid, true);
+    }
+    const request = (async () => {
+        try {
+            const data = await tmioApiRequest(`${TMIO_API_BASE}/leaderboard/personal/map/${mapUid}`, authToken, accountVersion);
+            if (authToken !== config.tmioAuthToken || accountVersion !== tmioAccountVersion) throw new Error('Account changed');
+            const pb = data && typeof data.time === 'number' && data.time > 0 ? {
+                time: data.time, medal: data.medal ?? null, timestamp: data.timestamp || null,
+            } : null;
+            if (tmioRecordCache.size >= 2000) tmioRecordCache.delete(tmioRecordCache.keys().next().value);
+            tmioRecordCache.set(key, { at: Date.now(), pb });
+            return pb;
+        } finally {
+            tmioPendingRecords.delete(key);
+        }
+    })();
+    tmioPendingRecords.set(key, request);
+    return request;
+}
 
 async function fetchTmioPbs(mapUids) {
-    const now = Date.now();
-    if (tmioPbCache && now - tmioPbCacheAt < TMIO_PB_CACHE_TTL_MS) {
-        return tmioPbCache;
-    }
-
-    if (tmioFetchInProgress) {
-        log('TMIO fetch already in progress, skipping');
-        return tmioPbCache || {};
-    }
-
-    const authToken = config.tmioAuthToken;
-    if (!authToken) {
-        return {};
-    }
-
-    tmioFetchInProgress = true;
-
+    if (!Array.isArray(mapUids) || mapUids.length > 1000) throw new Error('Invalid map UID list');
+    mapUids.forEach(validateMapUid);
     const results = {};
-    const CONCURRENCY = 3;
-    const DELAY_BETWEEN_BATCHES_MS = 2000;
-    let rateLimited = false;
-
-    for (let i = 0; i < mapUids.length; i += CONCURRENCY) {
-        if (rateLimited) break;
-
-        const batch = mapUids.slice(i, i + CONCURRENCY);
-        const promises = batch.map(uid =>
-            tmioApiRequest(
-                `${TMIO_API_BASE}/leaderboard/personal/map/${uid}`,
-                authToken
-            ).then(data => ({ uid, data, error: null }))
-             .catch(error => ({ uid, data: null, error }))
-        );
-
-        const settled = await Promise.all(promises);
-
-        for (const { uid, data, error } of settled) {
-            if (error) {
-                if (error.message.includes('Rate limited')) {
-                    log(`TMIO rate limited, stopping PB fetch at map ${uid}`);
-                    rateLimited = true;
-                    break;
-                }
-                log(`TMIO PB fetch failed for map ${uid}: ${error.message}`);
-                continue;
-            }
-            if (data && typeof data.time === 'number' && data.time > 0) {
-                results[uid] = {
-                    time: data.time,
-                    medal: data.medal !== undefined ? data.medal : null,
-                    timestamp: data.timestamp || null,
-                };
-            }
-        }
-
-        if (i + CONCURRENCY < mapUids.length && !rateLimited) {
-            await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES_MS));
-        }
+    for (const uid of new Set(mapUids)) {
+        const pb = await getTmioPersonalBest(uid);
+        if (pb) results[uid] = pb;
     }
-
-    tmioPbCache = results;
-    tmioPbCacheAt = now;
-    tmioFetchInProgress = false;
-    log(`Fetched ${Object.keys(results).length} trackmania.io PBs from ${mapUids.length} maps`);
     return results;
 }
 
@@ -792,139 +829,117 @@ function isLikelyHtmlResponse(contentType, initialChunk) {
     return normalizedChunk.startsWith('<!doctype html') || normalizedChunk.startsWith('<html');
 }
 
-function downloadMapFile(url, mapPath, event, mapId, retries = 3) {
-    const https = require('https');
-
-    return new Promise((resolve, reject) => {
-        if (cancelDownloadId !== mapId) {
-            log(`[Download] Download cancelled or changed for map: ${mapId}`);
-            reject(new Error('Download cancelled'));
-            return;
-        }
-        
-        log(`[Download] Starting download from: ${url}`);
-        const request = https.get(url, (response) => {
-            log(`[Download] Response status: ${response.statusCode} for URL: ${url}`);
-            event.sender.send('download-progress', { mapId, status: 'downloading', progress: 10 });
-
-            if (response.statusCode === 301 || response.statusCode === 302) {
-                const redirectUrl = response.headers.location;
-                log(`[Download] Redirect from ${url} to: ${redirectUrl}`);
-                response.resume();
-
-                if (!redirectUrl) {
-                    reject(new Error('TMX returned a redirect without a location header'));
-                    return;
-                }
-
-                downloadMapFile(redirectUrl, mapPath, event, mapId, retries)
-                    .then(resolve)
-                    .catch(reject);
-                return;
-            }
-
-            if (response.statusCode !== 200) {
-                response.resume();
-                if (retries > 0 && (response.statusCode === 500 || response.statusCode === 503 || response.statusCode === 502)) {
-                    if (cancelDownloadId !== mapId) {
-                        reject(new Error('Download cancelled'));
-                        return;
-                    }
-                    log(`Server error ${response.statusCode}, retrying... (${retries} left)`);
-                    event.sender.send('download-progress', { 
-                        mapId, 
-                        status: 'retry', 
-                        progress: 5,
-                        retryAttempt: 4 - retries,
-                        maxRetries: 3,
-                        error: `Server error ${response.statusCode}, retrying...`
-                    });
-                    setTimeout(() => {
-                        downloadMapFile(url, mapPath, event, mapId, retries - 1)
-                            .then(resolve)
-                            .catch(reject);
-                    }, 2000);
-                    return;
-                }
-                reject(new Error(`TMX download failed with status ${response.statusCode}`));
-                return;
-            }
-
-            const contentType = response.headers['content-type'];
-            const totalSize = parseInt(response.headers['content-length'], 10);
-            let downloaded = 0;
-            let validated = false;
-            let file = null;
-
-            const handleFailure = (error) => {
-                if (file) {
-                    file.destroy();
-                }
-                response.destroy();
-                cleanupFile(mapPath);
-                reject(error);
-            };
-
-            response.on('data', (chunk) => {
-                if (!validated) {
-                    validated = true;
-
-                    if (isLikelyHtmlResponse(contentType, chunk)) {
-                        handleFailure(new Error('TMX returned an error page instead of a map file'));
-                        return;
-                    }
-
-                    file = fs.createWriteStream(mapPath);
-                    file.on('error', (error) => {
-                        handleFailure(error);
-                    });
-                    file.write(chunk);
-                } else if (file) {
-                    file.write(chunk);
-                }
-
-                downloaded += chunk.length;
-                const progress = totalSize ? Math.round((downloaded / totalSize) * 50) + 10 : 50;
-                event.sender.send('download-progress', { mapId, status: 'downloading', progress });
-            });
-
-            response.on('end', () => {
-                if (!validated) {
-                    reject(new Error('TMX returned an empty response while downloading the map'));
-                    return;
-                }
-
-                if (!file) {
-                    reject(new Error('Unable to create map file for download'));
-                    return;
-                }
-
-                file.end(() => {
-                    log(`[Download] Complete: ${mapPath} (${downloaded} bytes)`);
-                    resolve();
-                });
-            });
-
-            response.on('error', (error) => {
-                handleFailure(error);
-            });
-        });
-
-        request.on('error', (error) => {
-            cleanupFile(mapPath);
-            log(`Download error: ${error.message}`);
-            reject(error);
-        });
-    });
+function normalizeMapId(mapId) {
+    const value = String(mapId ?? '');
+    if (!/^\d{1,12}$/.test(value) || Number(value) <= 0) {
+        throw new Error('Invalid map ID');
+    }
+    return String(Number(value));
 }
 
-log('Application started');
+function isValidCachedMap(mapPath) {
+    let fd;
+    try {
+        if (fs.statSync(mapPath).size < 4) return false;
+        fd = fs.openSync(mapPath, 'r');
+        const header = Buffer.alloc(3);
+        return fs.readSync(fd, header, 0, 3, 0) === 3 && header.toString() === 'GBX';
+    } catch (error) {
+        if (error.code !== 'ENOENT') log(`[Cache] Cannot read map: ${error.message}`);
+        return false;
+    } finally {
+        if (fd !== undefined) fs.closeSync(fd);
+    }
+}
 
-loadConfig();
+function sendDownloadProgress(event, data) {
+    if (!event.sender.isDestroyed()) event.sender.send('download-progress', data);
+}
 
-restoreNadeoSession().catch((err) => {
-    log(`Startup Nadeo session restore failed: ${err.message}`);
-});
+async function downloadMapFile(url, mapPath, event, mapId, retries = 3, redirects = 0) {
+    const signal = launchAbortController.signal;
+    const partialPath = `${mapPath}.part`;
+    signal.throwIfAborted();
+    const parsedUrl = new URL(url);
+    if (parsedUrl.protocol !== 'https:' || redirects > 5) {
+        throw new Error('Invalid map download redirect');
+    }
+
+    let request;
+    const transferTimeout = setTimeout(() => {
+        request?.destroy(new Error('Map download timed out. Please retry.'));
+    }, 120000);
+    try {
+        const response = await new Promise((resolve, reject) => {
+            request = https.get(parsedUrl, { signal }, resolve);
+            request.setTimeout(30000, () => request.destroy(new Error('Map download timed out. Please retry.')));
+            request.on('error', reject);
+        });
+        if ([301, 302, 303, 307, 308].includes(response.statusCode)) {
+            response.resume();
+            if (!response.headers.location) throw new Error('TMX returned an invalid redirect');
+            clearTimeout(transferTimeout);
+            return await downloadMapFile(new URL(response.headers.location, url).href, mapPath, event, mapId, retries, redirects + 1);
+        }
+        if (response.statusCode !== 200) {
+            response.resume();
+            const error = new Error(`TMX download failed with status ${response.statusCode}`);
+            error.retryable = response.statusCode >= 500;
+            throw error;
+        }
+
+        const totalSize = Number(response.headers['content-length']) || 0;
+        let downloaded = 0;
+        let header = Buffer.alloc(0);
+        let validated = false;
+        let lastProgress = -1;
+        const validator = new Transform({
+            transform(chunk, encoding, callback) {
+                downloaded += chunk.length;
+                if (downloaded > 100 * 1024 * 1024) {
+                    callback(new Error('Map download exceeds the size limit'));
+                    return;
+                }
+                if (!validated) {
+                    header = Buffer.concat([header, chunk]);
+                    if (header.length < 3) { callback(); return; }
+                    if (isLikelyHtmlResponse(response.headers['content-type'], header) || header.toString('ascii', 0, 3) !== 'GBX') {
+                        callback(new Error('TMX returned an invalid map file. Please retry.'));
+                        return;
+                    }
+                    validated = true;
+                    chunk = header;
+                    header = null;
+                }
+                const progress = totalSize ? Math.min(60, Math.round(downloaded / totalSize * 50) + 10) : 50;
+                if (progress !== lastProgress) {
+                    sendDownloadProgress(event, { mapId, status: 'downloading', progress });
+                    lastProgress = progress;
+                }
+                callback(null, chunk);
+            }
+        });
+        await pipeline(response, validator, fs.createWriteStream(partialPath), { signal });
+        if (!validated || downloaded < 4 || (totalSize && downloaded !== totalSize)) {
+            throw new Error('TMX returned an incomplete map file. Please retry.');
+        }
+        signal.throwIfAborted();
+        await fs.promises.rename(partialPath, mapPath);
+        log(`[Download] Complete: map ${mapId} (${downloaded} bytes)`);
+    } catch (error) {
+        request?.destroy();
+        cleanupFile(partialPath);
+        if (!signal.aborted && retries > 0 && (error.retryable || ['ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN'].includes(error.code))) {
+            sendDownloadProgress(event, { mapId, status: 'retry', progress: 5, retryAttempt: 4 - retries, maxRetries: 3, error: 'Connection failed, retrying...' });
+            clearTimeout(transferTimeout);
+            await delay(2000, undefined, { signal });
+            return await downloadMapFile(url, mapPath, event, mapId, retries - 1, redirects);
+        }
+        throw error;
+    } finally {
+        clearTimeout(transferTimeout);
+    }
+}
 
 async function parseReplayForMapUid(filePath) {
     try {
@@ -942,50 +957,77 @@ async function parseReplayForMapUid(filePath) {
     return null;
 }
 
+const replayDebounceTimers = new Map();
+
 function setupReplayWatcher() {
-    const docsDir = app.getPath('documents');
-    const replaysDir = path.join(docsDir, 'Trackmania', 'Replays', 'Autosaves');
-
-    if (!fs.existsSync(replaysDir)) {
-        log(`Replay directory does not exist, skipping watcher: ${replaysDir}`);
-        return;
+    const replaysDir = path.join(app.getPath('documents'), 'Trackmania', 'Replays', 'Autosaves');
+    if (!fs.existsSync(replaysDir)) return;
+    replayWatcher?.close();
+    try {
+        replayWatcher = fs.watch(replaysDir, { persistent: false }, (eventType, filename) => {
+            if (!filename) return;
+            const name = String(filename).toLowerCase();
+            if (!name.endsWith('.replay.gbx') || !name.includes('personalbest')) return;
+            clearTimeout(replayDebounceTimers.get(name));
+            replayDebounceTimers.set(name, setTimeout(async () => {
+                replayDebounceTimers.delete(name);
+                try {
+                    const filePath = path.join(replaysDir, String(filename));
+                    if (!fs.existsSync(filePath)) return;
+                    const result = await parseReplayForMapUid(filePath);
+                    if (result && mainWindow && !mainWindow.isDestroyed()) {
+                        localPbCache = null;
+                        log(`[Replay] New PB: ${result.mapUid} (${result.time}ms)`);
+                        mainWindow.webContents.send('replay-new-pb', result);
+                    }
+                } catch (error) {
+                    log(`[Replay] Could not read new PB: ${error.message}`);
+                }
+            }, 1500));
+        });
+        replayWatcher.on('error', error => log(`[Replay] Watcher failed: ${error.message}`));
+    } catch (error) {
+        log(`[Replay] Could not watch replays: ${error.message}`);
     }
+}
 
-    if (replayWatcher) {
-        replayWatcher.close();
+function validateFilterState(state) {
+    if (!state || typeof state !== 'object' || Array.isArray(state)) throw new Error('Invalid filter settings');
+    const normalized = {};
+    if (typeof state.includeCached === 'boolean') normalized.includeCached = state.includeCached;
+    if (['asc', 'desc'].includes(state.sortDirection)) normalized.sortDirection = state.sortDirection;
+    if (['mapId', 'natural', 'name', 'downloads', 'awards', 'difficulty'].includes(state.sortBy)) normalized.sortBy = state.sortBy;
+    if (typeof state.yearRange === 'string' && (state.yearRange === '' || /^20\d{2}$/.test(state.yearRange))) normalized.yearRange = state.yearRange;
+    if (typeof state.searchTerm === 'string') normalized.searchTerm = state.searchTerm.slice(0, 200);
+    if ([0, 20, 60, 100].includes(state.historyLimit)) normalized.historyLimit = state.historyLimit;
+    for (const [property, keys] of [['colorFilters', ['white', 'green', 'yellow', 'red', 'black', 'unclassified']], ['seasonFilters', ['Winter', 'Spring', 'Summer', 'Autumn']]]) {
+        normalized[property] = {};
+        for (const key of keys) {
+            if (typeof state[property]?.[key] === 'boolean') normalized[property][key] = state[property][key];
+        }
     }
+    return normalized;
+}
 
-    log(`Watching replay directory: ${replaysDir}`);
-
-    replayWatcher = fs.watch(replaysDir, { persistent: false }, (eventType, filename) => {
-        if (!filename || eventType !== 'rename') return;
-
-        const name = filename.toLowerCase();
-        if (!name.endsWith('.replay.gbx') || !name.includes('personalbest')) return;
-
-        if (replayDebounceTimer) clearTimeout(replayDebounceTimer);
-
-        replayDebounceTimer = setTimeout(async () => {
-            const filePath = path.join(replaysDir, filename);
-            if (!fs.existsSync(filePath)) return;
-
-            const result = await parseReplayForMapUid(filePath);
-            if (result && mainWindow && !mainWindow.isDestroyed()) {
-                log(`New PB replay detected: ${result.mapUid} (${result.time}ms)`);
-                mainWindow.webContents.send('replay-new-pb', result);
-            }
-        }, 1500);
-    });
-
-    replayWatcher.on('error', (error) => {
-        log(`Replay watcher error: ${error.message}`);
-    });
+function openTmxInBrowser(url) {
+    try {
+        const parsed = new URL(url);
+        if (parsed.protocol === 'https:' && parsed.hostname === 'trackmania.exchange' && !parsed.username && !parsed.password) {
+            shell.openExternal(parsed.href).catch(error => log(`[Browser] ${error.message}`));
+        }
+    } catch (error) {
+        log('[Browser] Invalid map link');
+    }
 }
 
 function createWindow() {
+    const bounds = config.windowBounds || {};
     mainWindow = new BrowserWindow({
-        width: 1200,
-        height: 800,
+        width: Number.isInteger(bounds.width) ? Math.max(640, Math.min(2560, bounds.width)) : 1200,
+        height: Number.isInteger(bounds.height) ? Math.max(500, Math.min(1440, bounds.height)) : 800,
+        minWidth: 640,
+        minHeight: 500,
+        backgroundColor: '#111827',
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -993,103 +1035,153 @@ function createWindow() {
         },
         icon: path.join(__dirname, 'icon.png')
     });
-
-    mainWindow.loadFile('index.html');
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+        openTmxInBrowser(url);
+        return { action: 'deny' };
+    });
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+        event.preventDefault();
+        openTmxInBrowser(url);
+    });
+    mainWindow.on('close', () => {
+        config.windowBounds = mainWindow.getNormalBounds();
+        config.windowMaximized = mainWindow.isMaximized();
+        try { saveConfig(); } catch (error) { log(`[Window] Could not save size: ${error.message}`); }
+        launchAbortController?.abort();
+    });
+    mainWindow.on('closed', () => { mainWindow = null; });
+    if (config.windowMaximized === true) mainWindow.maximize();
+    mainWindow.loadFile(path.join(__dirname, 'index.html'));
 }
 
-app.whenReady().then(() => {
-    createWindow();
-    setupReplayWatcher();
-});
+if (!app.requestSingleInstanceLock()) {
+    app.quit();
+} else {
+    log('Application started');
+    loadConfig();
+    restoreNadeoSession().catch(error => log(`[Startup] Session restore failed: ${error.message}`));
+    app.on('second-instance', () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+    });
+    app.whenReady().then(() => {
+        createWindow();
+        setupReplayWatcher();
+    }).catch(error => log(`[Startup] ${error.message}`));
+}
 
 app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-        app.quit();
-    }
+    if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', () => {
-    if (replayWatcher) {
-        replayWatcher.close();
-        replayWatcher = null;
-    }
+    launchAbortController?.abort();
+    replayWatcher?.close();
+    replayWatcher = null;
+    for (const timer of replayDebounceTimers.values()) clearTimeout(timer);
+    replayDebounceTimers.clear();
+    stopOAuthServer();
 });
 
 app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow();
-    }
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
-ipcMain.handle('open-trackmania', async (event, mapId) => {
-    log(`open-trackmania called with mapId: ${mapId}`);
+function handleIpc(channel, handler) {
+    ipcMain.handle(channel, async (event, ...args) => {
+        try {
+            if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== event.sender.mainFrame) {
+                return { success: false, error: 'Unauthorized request' };
+            }
+            return await handler(event, ...args);
+        } catch (error) {
+            log(`[IPC:${channel}] ${error.message}`);
+            return { success: false, error: error.message };
+        }
+    });
+}
+
+function persistConfigPatch(patch) {
+    const previous = config;
+    config = { ...config, ...patch };
+    try { saveConfig(); }
+    catch (error) { config = previous; throw error; }
+}
+
+handleIpc('open-trackmania', async (event, mapId) => {
+    try { mapId = normalizeMapId(mapId); } catch (error) { return { success: false, error: error.message }; }
+    log(`[Open] Requested map ${mapId}`);
     
-    if (activeDownloadId === mapId) {
+    if (activeDownloadId !== null) {
         log(`Download already in progress for map: ${mapId}`);
         return { success: false, error: 'Download already in progress' };
     }
     
     activeDownloadId = mapId;
-    cancelDownloadId = mapId;
+    launchAbortController = new AbortController();
+    let mapPath;
+    try {
+        cancelDownloadId = mapId;
     
-    let exePath = config.trackmaniaPath;
+        let exePath = config.trackmaniaPath;
     
-    if (!exePath || !fs.existsSync(exePath)) {
-        const possiblePaths = [
-            'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Trackmania\\Trackmania.exe',
-            'C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\games\\Trackmania\\Trackmania.exe',
-            'C:\\Program Files\\Ubisoft\\Ubisoft Game Launcher\\games\\Trackmania\\Trackmania.exe',
-            'C:\\Program Files\\Epic Games\\Trackmania\\Trackmania.exe',
-            'C:\\Program Files (x86)\\Epic Games\\Trackmania\\Trackmania.exe',
-            path.join(process.env.LOCALAPPDATA || '', 'Programs', 'trackmania', 'Trackmania.exe'),
-            path.join(process.env.LOCALAPPDATA || '', 'Ubisoft Game Launcher', 'games', 'Trackmania', 'Trackmania.exe'),
-            'D:\\Games\\Trackmania\\Trackmania.exe',
-            'D:\\Games\\Steam\\steamapps\\common\\Trackmania\\Trackmania.exe',
-            'E:\\Games\\Trackmania\\Trackmania.exe',
-        ];
+        if (!exePath || !fs.existsSync(exePath)) {
+            const possiblePaths = [
+                'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Trackmania\\Trackmania.exe',
+                'C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\games\\Trackmania\\Trackmania.exe',
+                'C:\\Program Files\\Ubisoft\\Ubisoft Game Launcher\\games\\Trackmania\\Trackmania.exe',
+                'C:\\Program Files\\Epic Games\\Trackmania\\Trackmania.exe',
+                'C:\\Program Files (x86)\\Epic Games\\Trackmania\\Trackmania.exe',
+                path.join(process.env.LOCALAPPDATA || '', 'Programs', 'trackmania', 'Trackmania.exe'),
+                path.join(process.env.LOCALAPPDATA || '', 'Ubisoft Game Launcher', 'games', 'Trackmania', 'Trackmania.exe'),
+                'D:\\Games\\Trackmania\\Trackmania.exe',
+                'D:\\Games\\Steam\\steamapps\\common\\Trackmania\\Trackmania.exe',
+                'E:\\Games\\Trackmania\\Trackmania.exe',
+            ];
         
-        // Find the first existing executable
-        exePath = null;
-        for (const p of possiblePaths) {
-            if (fs.existsSync(p)) {
-                exePath = p;
-                break;
+            // Find the first existing executable
+            exePath = null;
+            for (const p of possiblePaths) {
+                if (fs.existsSync(p)) {
+                    exePath = p;
+                    break;
+                }
+            }
+        
+            // Save the found path to config to avoid searching again
+            if (exePath) {
+                config.trackmaniaPath = exePath;
+                saveConfig();
             }
         }
-        
-        // Save the found path to config to avoid searching again
-        if (exePath) {
-            config.trackmaniaPath = exePath;
-            saveConfig();
+    
+        const downloadUrl = `https://trackmania.exchange/mapgbx/${mapId}`;
+        const tempDir = path.join(os.tmpdir(), 'trackmania-maps');
+        mapPath = path.join(tempDir, `${mapId}.Map.Gbx`);
+    
+        log(`Download URL: ${downloadUrl}`);
+        log(`Temp dir: ${tempDir}`);
+        log(`Map path: ${mapPath}`);
+        log(`Exe exists: ${Boolean(exePath && fs.existsSync(exePath))}`);
+    
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+            log(`Created temp dir: ${tempDir}`);
         }
-    }
     
-    const downloadUrl = `https://trackmania.exchange/mapgbx/${mapId}`;
-    const tempDir = path.join(os.tmpdir(), 'trackmania-maps');
-    const mapPath = path.join(tempDir, `${mapId}.Map.Gbx`);
+        const isRunning = await checkTrackmaniaRunning();
+        log(`Trackmania running: ${isRunning}`);
     
-    log(`Download URL: ${downloadUrl}`);
-    log(`Temp dir: ${tempDir}`);
-    log(`Map path: ${mapPath}`);
-    log(`Exe exists: ${fs.existsSync(exePath)}`);
-    
-    if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-        log(`Created temp dir: ${tempDir}`);
-    }
-    
-    let isRunning = checkTrackmaniaRunning();
-    log(`Trackmania running: ${isRunning}`);
-    
-    try {
-        if (fs.existsSync(mapPath)) {
+        if (isValidCachedMap(mapPath)) {
+            cleanupFile(`${mapPath}.part`);
             log(`Map already cached at: ${mapPath}`);
             const stats = fs.statSync(mapPath);
             log(`Cached map file size: ${stats.size} bytes`);
-            event.sender.send('download-progress', { mapId, status: 'cached', progress: 100 });
+            sendDownloadProgress(event, { mapId, status: 'cached', progress: 100 });
         } else {
             log('Starting download...');
-            event.sender.send('download-progress', { mapId, status: 'starting', progress: 0 });
+            sendDownloadProgress(event, { mapId, status: 'starting', progress: 0 });
             await downloadMapFile(downloadUrl, mapPath, event, mapId);
         }
         
@@ -1103,13 +1195,9 @@ ipcMain.handle('open-trackmania', async (event, mapId) => {
             log(`Found Trackmania at: ${exePath}`);
             if (!isRunning) {
                 log('Trackmania not running, launching first...');
-                spawn(`"${exePath}"`, [], { 
-                    detached: true, 
-                    stdio: 'ignore', 
-                    shell: true 
-                });
+                await startTrackmania(exePath);
                 
-                event.sender.send('download-progress', { mapId, status: 'waiting', progress: 60 });
+                sendDownloadProgress(event, { mapId, status: 'waiting', progress: 60 });
                 log('Waiting for Trackmania to start (polling every 2s)...');
                 
                 let attempts = 0;
@@ -1117,16 +1205,16 @@ ipcMain.handle('open-trackmania', async (event, mapId) => {
                 let processStarted = false;
                 
                 while (attempts < maxAttempts && !processStarted) {
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    await delay(2000, undefined, { signal: launchAbortController.signal });
                     attempts++;
                     
-                    processStarted = checkTrackmaniaRunning();
+                    processStarted = await checkTrackmaniaRunning();
                     if (processStarted) {
                         log('Trackmania process detected');
                     }
                     
                     const progress = 60 + Math.min(attempts, 35);
-                    event.sender.send('download-progress', { mapId, status: 'waiting', progress, attempts });
+                    sendDownloadProgress(event, { mapId, status: 'waiting', progress, attempts });
                 }
 
                 if (!processStarted) {
@@ -1135,42 +1223,66 @@ ipcMain.handle('open-trackmania', async (event, mapId) => {
             }
 
             await waitForTrackmaniaLogin(event, mapId);
-            event.sender.send('download-progress', { mapId, status: 'launching', progress: 90 });
+            sendDownloadProgress(event, { mapId, status: 'launching', progress: 90 });
             
             log(`Opening map: ${mapPath}`);
-            await shell.openPath(mapPath);
+            launchAbortController.signal.throwIfAborted();
+            const openError = await shell.openPath(mapPath);
+            if (openError) throw new Error('Could not open the map. Set the Trackmania executable in Settings and check the .Gbx file association.');
             log('shell.openPath called');
-            event.sender.send('download-progress', { mapId, status: 'complete', progress: 100 });
-            cancelDownloadId = null;
-            activeDownloadId = null;
+            sendDownloadProgress(event, { mapId, status: 'complete', progress: 100 });
             return { success: true, method: 'shell-openPath' };
         } else {
             log(`Exe not found, trying shell.openPath`);
-            await shell.openPath(mapPath);
-            event.sender.send('download-progress', { mapId, status: 'complete', progress: 100 });
-            cancelDownloadId = null;
-            activeDownloadId = null;
+            launchAbortController.signal.throwIfAborted();
+            const openError = await shell.openPath(mapPath);
+            if (openError) throw new Error('Could not open the map. Set the Trackmania executable in Settings and check the .Gbx file association.');
+            sendDownloadProgress(event, { mapId, status: 'complete', progress: 100 });
             return { success: true, method: 'shell-open' };
         }
     } catch (error) {
-        cancelDownloadId = null;
-        activeDownloadId = null;
-        cleanupFile(mapPath);
+        const cancelled = launchAbortController.signal.aborted;
+        if (mapPath) cleanupFile(`${mapPath}.part`);
         log(`Error: ${error.message}`);
         log(`Stack: ${error.stack}`);
-        event.sender.send('download-progress', { mapId, status: 'error', error: error.message });
-        return { success: false, error: error.message };
+        sendDownloadProgress(event, { mapId, status: cancelled ? 'cancelled' : 'error', error: error.message });
+        return { success: false, cancelled, error: cancelled ? 'Launch cancelled' : error.message };
+    } finally {
+        cancelDownloadId = null;
+        activeDownloadId = null;
+        launchAbortController = null;
     }
 });
 
-ipcMain.handle('is-map-cached', async (event, mapId) => {
-    const tempDir = path.join(os.tmpdir(), 'trackmania-maps');
-    const mapPath = path.join(tempDir, `${mapId}.Map.Gbx`);
-    return fs.existsSync(mapPath);
+handleIpc('is-map-cached', async (event, mapId) => {
+    try {
+        const id = normalizeMapId(mapId);
+        return isValidCachedMap(path.join(os.tmpdir(), 'trackmania-maps', `${id}.Map.Gbx`));
+    } catch (error) {
+        log(`[Cache] ${error.message}`);
+        return false;
+    }
 });
 
-ipcMain.handle('clear-cached-maps', async () => {
+handleIpc('get-cached-map-ids', async () => {
     try {
+        const tempDir = path.join(os.tmpdir(), 'trackmania-maps');
+        const files = await fs.promises.readdir(tempDir).catch(error => {
+            if (error.code === 'ENOENT') return [];
+            throw error;
+        });
+        const mapIds = files.filter(file => /^\d+\.Map\.Gbx$/.test(file) && isValidCachedMap(path.join(tempDir, file)))
+            .map(file => Number(file.split('.')[0]));
+        return { success: true, mapIds };
+    } catch (error) {
+        log(`[Cache] Could not list maps: ${error.message}`);
+        return { success: false, error: error.message, mapIds: [] };
+    }
+});
+
+handleIpc('clear-cached-maps', async () => {
+    try {
+        if (activeDownloadId !== null) return { success: false, error: 'Cancel the current launch before clearing cached maps.' };
         const tempDir = path.join(os.tmpdir(), 'trackmania-maps');
         if (!fs.existsSync(tempDir)) return { success: true, count: 0 };
         const files = fs.readdirSync(tempDir).filter(f => f.endsWith('.Map.Gbx'));
@@ -1185,46 +1297,34 @@ ipcMain.handle('clear-cached-maps', async () => {
     }
 });
 
-ipcMain.handle('open-map-direct', async (event, mapId) => {
-    const commonPaths = [
-        'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Trackmania\\Trackmania.exe',
-        'C:\\Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\games\\Trackmania\\Trackmania.exe',
-        'C:\\Program Files\\Ubisoft\\Ubisoft Game Launcher\\games\\Trackmania\\Trackmania.exe',
-        'C:\\Program Files\\Epic Games\\Trackmania\\Trackmania.exe',
-        'C:\\Program Files (x86)\\Epic Games\\Trackmania\\Trackmania.exe',
-        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'trackmania', 'Trackmania.exe'),
-        path.join(process.env.LOCALAPPDATA || '', 'Ubisoft Game Launcher', 'games', 'Trackmania', 'Trackmania.exe'),
-        path.join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'Ubisoft Game Launcher', 'games', 'Trackmania', 'Trackmania.exe'),
-        'D:\\Games\\Trackmania\\Trackmania.exe',
-        'D:\\Games\\Steam\\steamapps\\common\\Trackmania\\Trackmania.exe',
-        'D:\\Program Files\\Trackmania\\Trackmania.exe',
-        'E:\\Games\\Trackmania\\Trackmania.exe',
-        'E:\\Games\\Steam\\steamapps\\common\\Trackmania\\Trackmania.exe',
-    ];
+function startTrackmania(exePath, args = []) {
+    return new Promise((resolve, reject) => {
+        const child = spawn(exePath, args, { detached: true, stdio: 'ignore' });
+        child.once('error', reject);
+        child.once('spawn', () => { child.unref(); resolve(); });
+    });
+}
 
-    for (const exePath of commonPaths) {
-        try {
-            log(`[Open] Trying exe: ${exePath}`);
-            spawn(exePath, [`/joinmap=${mapId}`], { detached: true });
-            log(`[Open] Launched: ${exePath} with /joinmap=${mapId}`);
-            return { success: true, path: exePath };
-        } catch (e) {
-            continue;
+handleIpc('open-map-direct', async (event, mapId) => {
+    try {
+        mapId = normalizeMapId(mapId);
+        if (config.trackmaniaPath && fs.existsSync(config.trackmaniaPath)) {
+            await startTrackmania(config.trackmaniaPath, [`/joinmap=${mapId}`]);
+        } else {
+            await shell.openExternal(`trackmania://joinmap/${mapId}`);
         }
+        return { success: true };
+    } catch (error) {
+        log(`[Open] Direct launch failed: ${error.message}`);
+        return { success: false, error: error.message };
     }
-
-    const protocolUrl = `trackmania://joinmap/${mapId}`;
-    log(`[Open] Trying protocol: ${protocolUrl}`);
-    await shell.openExternal(protocolUrl);
-    log(`[Open] Opened protocol URL: ${protocolUrl}`);
-    return { success: true, method: 'protocol' };
 });
 
-ipcMain.handle('get-trackmania-path', async () => {
+handleIpc('get-trackmania-path', async () => {
     return config.trackmaniaPath || null;
 });
 
-ipcMain.handle('select-trackmania-path', async () => {
+handleIpc('select-trackmania-path', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
         title: 'Select Trackmania.exe',
         filters: [{ name: 'Executables', extensions: ['exe'] }],
@@ -1234,8 +1334,7 @@ ipcMain.handle('select-trackmania-path', async () => {
     if (!result.canceled && result.filePaths.length > 0) {
         const selectedPath = result.filePaths[0];
         if (selectedPath.toLowerCase().endsWith('trackmania.exe')) {
-            config.trackmaniaPath = selectedPath;
-            saveConfig();
+            persistConfigPatch({ trackmaniaPath: selectedPath });
             return { success: true, path: selectedPath };
         } else {
             return { success: false, error: 'Please select a file named Trackmania.exe' };
@@ -1244,16 +1343,15 @@ ipcMain.handle('select-trackmania-path', async () => {
     return { success: false, canceled: true };
 });
 
-ipcMain.handle('get-tmx-user', async () => {
+handleIpc('get-tmx-user', async () => {
     return config.tmxUser || null;
 });
 
-ipcMain.handle('save-tmx-user', async (event, payload) => {
+handleIpc('save-tmx-user', async (event, payload) => {
     try {
-        const name = typeof payload?.name === 'string' ? payload.name.trim() : '';
-        const userId = Number.isFinite(Number(payload?.userId)) ? Number(payload.userId) : null;
-        config.tmxUser = name || userId ? { name, userId } : null;
-        saveConfig();
+        const name = typeof payload?.name === 'string' ? payload.name.trim().slice(0, 200) : '';
+        const userId = Number.isSafeInteger(Number(payload?.userId)) && Number(payload?.userId) > 0 ? Number(payload.userId) : null;
+        persistConfigPatch({ tmxUser: name || userId ? { name, userId } : null });
         return { success: true };
     } catch (error) {
         log(`Error saving TMX user: ${error.message}`);
@@ -1261,7 +1359,7 @@ ipcMain.handle('save-tmx-user', async (event, payload) => {
     }
 });
 
-ipcMain.handle('get-local-pbs', async () => {
+handleIpc('get-local-pbs', async () => {
     try {
         const pbs = await loadLocalPersonalBests();
         return { success: true, pbs };
@@ -1271,10 +1369,9 @@ ipcMain.handle('get-local-pbs', async () => {
     }
 });
 
-ipcMain.handle('save-filter-state', async (event, state) => {
+handleIpc('save-filter-state', async (event, state) => {
     try {
-        config.filterState = state;
-        saveConfig();
+        persistConfigPatch({ filterState: validateFilterState(state) });
         return { success: true };
     } catch (error) {
         log(`Error saving filter state: ${error.message}`);
@@ -1282,25 +1379,27 @@ ipcMain.handle('save-filter-state', async (event, state) => {
     }
 });
 
-ipcMain.handle('load-filter-state', async () => {
+handleIpc('load-filter-state', async () => {
     try {
-        return config.filterState || null;
+        return config.filterState ? validateFilterState(config.filterState) : null;
     } catch (error) {
         log(`Error loading filter state: ${error.message}`);
         return null;
     }
 });
 
-ipcMain.handle('cancel-download', async (event, mapId) => {
+handleIpc('cancel-download', async (event, mapId) => {
+    try { mapId = normalizeMapId(mapId); } catch (error) { return false; }
     if (cancelDownloadId === mapId) {
         cancelDownloadId = null;
+        launchAbortController?.abort();
         log(`Download cancelled for map: ${mapId}`);
         return true;
     }
     return false;
 });
 
-ipcMain.handle('check-clean-marker', async () => {
+handleIpc('check-clean-marker', async () => {
     const markerPath = path.join(os.tmpdir(), 'trackmania-clean-marker');
     try {
         if (fs.existsSync(markerPath)) {
@@ -1314,12 +1413,16 @@ ipcMain.handle('check-clean-marker', async () => {
     return false;
 });
 
-ipcMain.handle('log', async (event, message) => {
-    log(`[Renderer] ${message}`);
+handleIpc('log', async (event, message) => {
+    if (typeof message !== 'string') return { success: false, error: 'Invalid log message' };
+    log(`[Renderer] ${message.slice(0, 2000)}`);
+    return { success: true };
 });
 
-ipcMain.handle('nadeo-login-ubisoft', async (event, { email, password }) => {
+handleIpc('nadeo-login-ubisoft', async (event, payload) => {
     try {
+        const { email, password } = payload || {};
+        if (typeof email !== 'string' || typeof password !== 'string' || !email || !password || email.length > 320 || password.length > 1024) throw new Error('Invalid login details');
         const result = await loginWithUbisoft(email, password);
         return result;
     } catch (error) {
@@ -1328,8 +1431,10 @@ ipcMain.handle('nadeo-login-ubisoft', async (event, { email, password }) => {
     }
 });
 
-ipcMain.handle('nadeo-login-oauth', async (event, { clientId, clientSecret }) => {
+handleIpc('nadeo-login-oauth', async (event, payload) => {
     try {
+        const { clientId, clientSecret } = payload || {};
+        if (typeof clientId !== 'string' || typeof clientSecret !== 'string' || !clientId || !clientSecret || clientId.length > 1024 || clientSecret.length > 1024) throw new Error('Invalid OAuth details');
         const result = await loginWithOAuth(clientId, clientSecret);
         return result;
     } catch (error) {
@@ -1339,12 +1444,12 @@ ipcMain.handle('nadeo-login-oauth', async (event, { clientId, clientSecret }) =>
     }
 });
 
-ipcMain.handle('nadeo-logout', async () => {
+handleIpc('nadeo-logout', async () => {
     logoutNadeo();
     return { success: true };
 });
 
-ipcMain.handle('nadeo-status', async () => {
+handleIpc('nadeo-status', async () => {
     return {
         authenticated: isNadeoAuthenticated(),
         authMethod: config.nadeoAuthMethod || null,
@@ -1352,8 +1457,11 @@ ipcMain.handle('nadeo-status', async () => {
     };
 });
 
-ipcMain.handle('nadeo-get-pbs', async (event, { mapUids }) => {
+handleIpc('nadeo-get-pbs', async (event, payload) => {
     try {
+        const mapUids = payload?.mapUids;
+        if (!Array.isArray(mapUids) || mapUids.length > 1000) throw new Error('Invalid map UID list');
+        mapUids.forEach(validateMapUid);
         if (!isNadeoAuthenticated()) {
             return { success: false, error: 'Not authenticated', pbs: {} };
         }
@@ -1365,7 +1473,7 @@ ipcMain.handle('nadeo-get-pbs', async (event, { mapUids }) => {
     }
 });
 
-ipcMain.handle('nadeo-restore-session', async () => {
+handleIpc('nadeo-restore-session', async () => {
     try {
         const restored = await restoreNadeoSession();
         return { success: restored };
@@ -1375,17 +1483,16 @@ ipcMain.handle('nadeo-restore-session', async () => {
     }
 });
 
-ipcMain.handle('tmio-get-auth-token', async () => {
+handleIpc('tmio-get-auth-token', async () => {
     return config.tmioAuthToken || null;
 });
 
-ipcMain.handle('tmio-save-auth-token', async (event, token) => {
+handleIpc('tmio-save-auth-token', async (event, token) => {
     try {
-        const trimmed = (token || '').trim();
-        config.tmioAuthToken = trimmed || null;
-        saveConfig();
-        tmioPbCache = null;
-        tmioPbCacheAt = 0;
+        if (typeof token !== 'string' || token.length > 8192) throw new Error('Invalid auth token');
+        const trimmed = token.trim();
+        persistConfigPatch({ tmioAuthToken: trimmed || null });
+        resetTmioCache();
         return { success: true };
     } catch (error) {
         log(`Error saving TMIO auth token: ${error.message}`);
@@ -1393,8 +1500,11 @@ ipcMain.handle('tmio-save-auth-token', async (event, token) => {
     }
 });
 
-ipcMain.handle('tmio-get-pbs', async (event, { mapUids }) => {
+handleIpc('tmio-get-pbs', async (event, payload) => {
     try {
+        const mapUids = payload?.mapUids;
+        if (!Array.isArray(mapUids) || mapUids.length > 1000) throw new Error('Invalid map UID list');
+        mapUids.forEach(validateMapUid);
         if (!config.tmioAuthToken) {
             return { success: false, error: 'Not authenticated', pbs: {} };
         }
@@ -1406,105 +1516,72 @@ ipcMain.handle('tmio-get-pbs', async (event, { mapUids }) => {
     }
 });
 
-ipcMain.handle('tmio-get-pb-single', async (event, { mapUid }) => {
+handleIpc('tmio-get-pb-single', async (event, payload) => {
     try {
-        if (!config.tmioAuthToken) {
-            return { success: false, error: 'Not authenticated' };
-        }
-        if (!mapUid) {
-            return { success: false, error: 'No mapUid provided' };
-        }
-        const data = await tmioApiRequest(
-            `${TMIO_API_BASE}/leaderboard/personal/map/${mapUid}`,
-            config.tmioAuthToken
-        );
-        if (data && typeof data.time === 'number' && data.time > 0) {
-            return {
-                success: true,
-                pb: {
-                    time: data.time,
-                    medal: data.medal !== undefined ? data.medal : null,
-                    timestamp: data.timestamp || null,
-                },
-            };
-        }
-        return { success: true, pb: null };
+        const pb = await getTmioPersonalBest(payload?.mapUid, payload?.forceRefresh === true);
+        return { success: true, pb };
     } catch (error) {
-        log(`TMIO PB fetch failed for map ${mapUid}: ${error.message}`);
-        return { success: false, error: error.message };
+        log(`[TMIO] PB lookup failed: ${error.message}`);
+        return { success: false, error: error.message, retryAfterMs: error.retryAfterMs || 0 };
     }
 });
 
 let tmioLoginWindow = null;
 
-ipcMain.handle('tmio-login', async () => {
-    return new Promise((resolve) => {
-        if (tmioLoginWindow) {
-            try { tmioLoginWindow.close(); } catch {}
-        }
-
-        tmioLoginWindow = new BrowserWindow({
-            width: 900,
-            height: 700,
-            title: 'Login to trackmania.io',
-            webPreferences: {
-                nodeIntegration: false,
-                contextIsolation: true,
-            },
+handleIpc('tmio-login', async () => {
+    return new Promise(resolve => {
+        tmioLoginWindow?.close();
+        const loginWindow = new BrowserWindow({
+            width: 900, height: 700, title: 'Login to trackmania.io',
+            webPreferences: { nodeIntegration: false, contextIsolation: true },
         });
-
-        tmioLoginWindow.loadURL('https://trackmania.io');
-
+        tmioLoginWindow = loginWindow;
         let resolved = false;
-        let pollInterval = null;
+        let polling = false;
+        let pollInterval;
+        let loginTimeout;
 
-        function cleanup() {
-            if (pollInterval) {
-                clearInterval(pollInterval);
-                pollInterval = null;
-            }
+        function finish(result) {
+            if (resolved) return;
+            resolved = true;
+            clearInterval(pollInterval);
+            clearTimeout(loginTimeout);
+            if (tmioLoginWindow === loginWindow) tmioLoginWindow = null;
+            if (!loginWindow.isDestroyed()) loginWindow.close();
+            resolve(result);
         }
 
         async function checkForToken() {
-            if (resolved || !tmioLoginWindow || tmioLoginWindow.isDestroyed()) return;
+            if (resolved || polling || loginWindow.isDestroyed()) return;
+            polling = true;
             try {
-                const token = await tmioLoginWindow.webContents.executeJavaScript(
-                    'localStorage.getItem("tmio-secret")', true
-                );
-                if (token && token.length > 10) {
-                    resolved = true;
-                    cleanup();
-                    config.tmioAuthToken = token;
-                    saveConfig();
-                    tmioPbCache = null;
-                    tmioPbCacheAt = 0;
-                    log('Trackmania.io auth token captured successfully');
-                    try { tmioLoginWindow.close(); } catch {}
-                    tmioLoginWindow = null;
-                    resolve({ success: true });
+                if (new URL(loginWindow.webContents.getURL()).origin !== 'https://trackmania.io') return;
+                const token = await loginWindow.webContents.executeJavaScript('localStorage.getItem("tmio-secret")', true);
+                if (resolved || loginWindow.isDestroyed()) return;
+                if (typeof token === 'string' && token.length > 10 && token.length <= 8192) {
+                    try { persistConfigPatch({ tmioAuthToken: token }); }
+                    catch (error) {
+                        finish({ success: false, error: 'Could not save login. Please retry.' });
+                        return;
+                    }
+                    resetTmioCache();
+                    log('[TMIO] Login saved successfully');
+                    finish({ success: true });
                 }
-            } catch (e) {
-                // Page may not be loaded yet or cross-origin restriction
+            } catch (error) {
+                // Navigation may interrupt token retrieval. The next poll retries it.
+            } finally {
+                polling = false;
             }
         }
 
         pollInterval = setInterval(checkForToken, 1000);
-
-        tmioLoginWindow.webContents.once('did-navigate', () => {
-            checkForToken();
-        });
-
-        tmioLoginWindow.webContents.once('did-finish-load', () => {
-            setTimeout(checkForToken, 2000);
-        });
-
-        tmioLoginWindow.on('closed', () => {
-            cleanup();
-            tmioLoginWindow = null;
-            if (!resolved) {
-                resolved = true;
-                resolve({ success: false, error: 'Login window closed' });
-            }
+        loginTimeout = setTimeout(() => finish({ success: false, error: 'Login timed out. Please retry.' }), 5 * 60 * 1000);
+        loginWindow.webContents.on('did-finish-load', checkForToken);
+        loginWindow.on('closed', () => finish({ success: false, error: 'Login window closed' }));
+        loginWindow.loadURL('https://trackmania.io').catch(error => {
+            log(`[TMIO] Login page failed: ${error.message}`);
+            finish({ success: false, error: 'Could not load trackmania.io. Check your connection and retry.' });
         });
     });
 });
